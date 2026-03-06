@@ -14,8 +14,10 @@ const (
 )
 
 type AppState struct {
-	CurrentScreen Screen
-	Config        *config.Config
+	CurrentScreen   Screen
+	Config          *config.Config
+	DeviceModel     string
+	DeviceConnected bool
 
 	IsDownloading    bool
 	DownloadProgress float64
