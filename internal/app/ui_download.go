@@ -13,6 +13,7 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
+	"vary/internal/adb"
 	"vary/internal/downloader"
 	"vary/internal/github"
 	"vary/internal/morphe"
@@ -78,17 +79,33 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 			return
 		}
 
+		if !adb.IsAvailable() {
+			state.DownloadStatus = "Downloading Android Platform Tools..."
+			progressCb := func(downloaded, total int64) {
+				if total > 0 {
+					raw := float32(downloaded) / float32(total)
+					d.progress = 0.06 + (raw * 0.12)
+					state.DownloadProgress = float64(d.progress)
+				}
+			}
+			if err := adb.EnsurePlatformTools(progressCb); err != nil {
+				fail("Platform tools error: ", err)
+				return
+			}
+			advanceStage("Android Platform Tools ready", 0.18)
+		}
+
 		client := github.NewClient()
 		devMode := state.Config.IsDev()
 
-		advanceStage("Fetching morphe-cli...", 0.15)
+		advanceStage("Fetching morphe-cli...", 0.22)
 		cliRelease, err := client.GetCLIRelease(devMode)
 		if err != nil {
 			fail("GitHub CLI error: ", err)
 			return
 		}
 
-		advanceStage("Fetching morphe-patches...", 0.25)
+		advanceStage("Fetching morphe-patches...", 0.30)
 		patchesRelease, err := client.GetPatchesRelease(devMode)
 		if err != nil {
 			fail("GitHub Patches error: ", err)
