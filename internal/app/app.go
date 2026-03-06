@@ -2,6 +2,7 @@ package app
 
 import (
 	"vary/internal/config"
+	"vary/internal/morphe"
 )
 
 type Screen int
@@ -11,6 +12,7 @@ const (
 	ScreenSettings
 	ScreenDownload
 	ScreenPackages
+	ScreenPatches
 )
 
 type AppState struct {
@@ -26,6 +28,12 @@ type AppState struct {
 	Packages         []string
 	FilteredPackages []string
 	SearchQuery      string
+	Patches          []morphe.Patch
+	SelectedPackage  string
+	CLIPath          string
+	PatchesPath      string
+	IsLoadingPatches bool
+	PatchStatus      string
 
 	StatusMessage string
 	StatusError   bool
@@ -37,6 +45,7 @@ func NewAppState(cfg *config.Config) *AppState {
 		Config:           cfg,
 		Packages:         make([]string, 0),
 		FilteredPackages: make([]string, 0),
+		Patches:          make([]morphe.Patch, 0),
 		StatusMessage:    "Ready",
 	}
 }
@@ -53,6 +62,10 @@ func (s *AppState) SetStatus(msg string, isError bool) {
 func (s *AppState) SetPackages(packages []string) {
 	s.Packages = packages
 	s.FilterPackages(s.SearchQuery)
+}
+
+func (s *AppState) SetPatches(patches []morphe.Patch) {
+	s.Patches = patches
 }
 
 func (s *AppState) FilterPackages(query string) {

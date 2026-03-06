@@ -62,7 +62,7 @@ func (p *PackagesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 				}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return layout.Inset{Bottom: unit.Dp(20)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							title := material.H5(material.NewTheme(), "Available Apps")
+							title := material.H5(material.NewTheme(), "Select Application")
 							title.Color = th.Text
 							return title.Layout(gtx)
 						})
@@ -188,10 +188,31 @@ func (p *PackagesScreen) packageItem(gtx layout.Context, th *Theme, item *Packag
 		Top:    unit.Dp(4),
 		Bottom: unit.Dp(4),
 	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		btn := material.Button(material.NewTheme(), &item.clicked, item.label)
-		btn.Background = th.Surface
-		btn.Color = th.Text
-		return btn.Layout(gtx)
+		itemHeight := gtx.Dp(unit.Dp(44))
+		itemWidth := min(gtx.Constraints.Max.X-gtx.Dp(unit.Dp(20)), gtx.Dp(unit.Dp(560)))
+		if itemWidth <= 0 {
+			itemWidth = gtx.Constraints.Max.X
+		}
+
+		return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints = layout.Exact(image.Pt(itemWidth, itemHeight))
+			return item.clicked.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				outer := clip.UniformRRect(image.Rect(0, 0, itemWidth, itemHeight), gtx.Dp(unit.Dp(4)))
+				paint.FillShape(gtx.Ops, color.NRGBA{R: 95, G: 95, B: 95, A: 255}, outer.Op(gtx.Ops))
+
+				inner := image.Rect(1, 1, itemWidth-1, itemHeight-1)
+				innerRRect := clip.UniformRRect(inner, gtx.Dp(unit.Dp(4)))
+				paint.FillShape(gtx.Ops, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, innerRRect.Op(gtx.Ops))
+
+				return layout.Inset{Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					label := material.Body1(material.NewTheme(), item.label)
+					label.Color = th.Text
+					return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return label.Layout(gtx)
+					})
+				})
+			})
+		})
 	})
 }
 
@@ -204,7 +225,11 @@ func (p *PackagesScreen) HandleInput(gtx layout.Context, state *AppState) {
 	}
 	for i := range p.items {
 		if p.items[i].clicked.Clicked(gtx) {
+			state.SelectedPackage = p.items[i].label
+			state.SetPatches(nil)
+			state.PatchStatus = ""
 			state.SetStatus("Selected: "+p.items[i].label, false)
+			state.SetScreen(ScreenPatches)
 		}
 	}
 }

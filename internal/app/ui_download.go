@@ -205,6 +205,11 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 		}
 
 		advanceStage("Done", 1.0)
+		state.CLIPath = cliPath
+		state.PatchesPath = patchesPath
+		state.SelectedPackage = ""
+		state.SetPatches(nil)
+		state.PatchStatus = ""
 		state.SetPackages(packages)
 		state.SetStatus(fmt.Sprintf("%d packages found", len(packages)), false)
 		state.SetScreen(ScreenPackages)

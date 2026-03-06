@@ -15,6 +15,12 @@ type Executor struct {
 	patchesPath string
 }
 
+type Patch struct {
+	Name        string
+	Description string
+	Enabled     bool
+}
+
 func NewExecutor(cliPath, patchesPath string) *Executor {
 	return &Executor{
 		cliPath:     cliPath,
@@ -38,6 +44,24 @@ func (e *Executor) ListPackages(ctx context.Context) ([]string, error) {
 	}
 
 	return ParsePackages(stdout.String()), nil
+}
+
+func (e *Executor) ListPatches(ctx context.Context, packageName string) ([]Patch, error) {
+	if err := e.checkJava(); err != nil {
+		return nil, err
+	}
+
+	cmd := exec.CommandContext(ctx, "java", "-jar", e.cliPath, "list-patches", e.patchesPath, "-f", packageName)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("failed to execute morphe-cli: %w (stderr: %s)", err, stderr.String())
+	}
+
+	return ParsePatches(stdout.String()), nil
 }
 
 func (e *Executor) checkJava() error {
@@ -70,4 +94,62 @@ func ParsePackages(output string) []string {
 	}
 
 	return packages
+}
+
+func ParsePatches(output string) []Patch {
+	patches := make([]Patch, 0)
+	seen := make(map[string]bool)
+
+	appendCurrent := func(current *Patch) {
+		if current.Name == "" {
+			return
+		}
+		if seen[current.Name] {
+			return
+		}
+		seen[current.Name] = true
+		patches = append(patches, *current)
+	}
+
+	current := Patch{}
+	lines := strings.Split(output, "\n")
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			appendCurrent(&current)
+			current = Patch{}
+			continue
+		}
+
+		switch {
+		case strings.HasPrefix(line, "Name:"):
+			current.Name = strings.TrimSpace(strings.TrimPrefix(line, "Name:"))
+		case strings.HasPrefix(line, "Description:"):
+			current.Description = strings.TrimSpace(strings.TrimPrefix(line, "Description:"))
+		case strings.HasPrefix(line, "Enabled:"):
+			enabledText := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(line, "Enabled:")))
+			current.Enabled = enabledText == "true"
+		}
+	}
+	appendCurrent(&current)
+
+	if len(patches) > 0 {
+		return patches
+	}
+
+	legacy := regexp.MustCompile(`(?m)^\s*(?:INFORMAÇÕES:\s*)?Patch name:\s*([^\r\n]+?)\s*$`)
+	matches := legacy.FindAllStringSubmatch(output, -1)
+	for _, match := range matches {
+		if len(match) <= 1 {
+			continue
+		}
+		name := strings.TrimSpace(match[1])
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		patches = append(patches, Patch{Name: name})
+	}
+
+	return patches
 }
