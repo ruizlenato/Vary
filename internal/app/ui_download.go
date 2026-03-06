@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gioui.org/layout"
@@ -97,26 +98,50 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 
 		client := github.NewClient()
 		devMode := state.Config.IsDev()
+		cliStatePath := filepath.Join(appDir, "cli_state.json")
+		patchesStatePath := filepath.Join(appDir, "patches_state.json")
+		cliState, _ := downloader.LoadState(cliStatePath)
+		patchesState, _ := downloader.LoadState(patchesStatePath)
+
+		var cliPath string
+		var patchesPath string
 
 		advanceStage("Fetching morphe-cli...", 0.22)
 		cliRelease, err := client.GetCLIRelease(devMode)
 		if err != nil {
-			fail("GitHub CLI error: ", err)
-			return
+			if isRateLimitError(err) {
+				fallbackPath, ok := resolveCachedAsset(appDir, cliState, "morphe-cli")
+				if !ok {
+					fail("GitHub CLI error: ", err)
+					return
+				}
+				cliPath = fallbackPath
+				advanceStage("GitHub rate limited, using cached morphe-cli", 0.42)
+			} else {
+				fail("GitHub CLI error: ", err)
+				return
+			}
 		}
 
 		advanceStage("Fetching morphe-patches...", 0.30)
 		patchesRelease, err := client.GetPatchesRelease(devMode)
 		if err != nil {
-			fail("GitHub Patches error: ", err)
-			return
+			if isRateLimitError(err) {
+				fallbackPath, ok := resolveCachedAsset(appDir, patchesState, "morphe-patches")
+				if !ok {
+					fail("GitHub Patches error: ", err)
+					return
+				}
+				patchesPath = fallbackPath
+				advanceStage("GitHub rate limited, using cached morphe-patches", 0.55)
+			} else {
+				fail("GitHub Patches error: ", err)
+				return
+			}
 		}
 
-		cliPath := filepath.Join(appDir, cliRelease.AssetName)
-		cliStatePath := filepath.Join(appDir, "cli_state.json")
-		cliState, _ := downloader.LoadState(cliStatePath)
-
-		if cliState == nil || cliState.TagName != cliRelease.TagName {
+		if cliPath == "" && (cliState == nil || cliState.TagName != cliRelease.TagName) {
+			cliPath = filepath.Join(appDir, cliRelease.AssetName)
 			state.DownloadStatus = fmt.Sprintf("Downloading %s...", cliRelease.AssetName)
 			progressCb := func(downloaded, total int64) {
 				if total > 0 {
@@ -138,15 +163,13 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 				DownloadedAt: time.Now().Format(time.RFC3339),
 			}
 			downloader.SaveState(cliStatePath, newState)
-		} else {
+		} else if cliPath == "" {
+			cliPath = filepath.Join(appDir, cliRelease.AssetName)
 			advanceStage("morphe-cli up to date", 0.55)
 		}
 
-		patchesPath := filepath.Join(appDir, patchesRelease.AssetName)
-		patchesStatePath := filepath.Join(appDir, "patches_state.json")
-		patchesState, _ := downloader.LoadState(patchesStatePath)
-
-		if patchesState == nil || patchesState.TagName != patchesRelease.TagName {
+		if patchesPath == "" && (patchesState == nil || patchesState.TagName != patchesRelease.TagName) {
+			patchesPath = filepath.Join(appDir, patchesRelease.AssetName)
 			state.DownloadStatus = fmt.Sprintf("Downloading %s...", patchesRelease.AssetName)
 			progressCb := func(downloaded, total int64) {
 				if total > 0 {
@@ -168,7 +191,8 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 				DownloadedAt: time.Now().Format(time.RFC3339),
 			}
 			downloader.SaveState(patchesStatePath, newState)
-		} else {
+		} else if patchesPath == "" {
+			patchesPath = filepath.Join(appDir, patchesRelease.AssetName)
 			advanceStage("morphe-patches up to date", 0.85)
 		}
 
@@ -185,6 +209,41 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 		state.SetStatus(fmt.Sprintf("%d packages found", len(packages)), false)
 		state.SetScreen(ScreenPackages)
 	}()
+}
+
+func isRateLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "rate limit")
+}
+
+func resolveCachedAsset(appDir string, state *downloader.State, fallbackName string) (string, bool) {
+	if state != nil && state.AssetName != "" {
+		candidate := filepath.Join(appDir, state.AssetName)
+		if storage.FileExists(candidate) {
+			return candidate, true
+		}
+	}
+
+	entries, err := os.ReadDir(appDir)
+	if err != nil {
+		return "", false
+	}
+
+	needle := strings.ToLower(fallbackName)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := strings.ToLower(entry.Name())
+		if strings.Contains(name, needle) {
+			return filepath.Join(appDir, entry.Name()), true
+		}
+	}
+
+	return "", false
 }
 
 func (d *DownloadScreen) Layout(gtx layout.Context, th *Theme, state *AppState) layout.Dimensions {
