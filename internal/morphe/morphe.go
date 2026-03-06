@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -134,6 +135,7 @@ func ParsePatches(output string) []Patch {
 	appendCurrent(&current)
 
 	if len(patches) > 0 {
+		sortPatchesByName(patches)
 		return patches
 	}
 
@@ -151,5 +153,14 @@ func ParsePatches(output string) []Patch {
 		patches = append(patches, Patch{Name: name})
 	}
 
+	sortPatchesByName(patches)
 	return patches
+}
+
+func sortPatchesByName(patches []Patch) {
+	sort.Slice(patches, func(i, j int) bool {
+		left := strings.ToLower(strings.TrimSpace(patches[i].Name))
+		right := strings.ToLower(strings.TrimSpace(patches[j].Name))
+		return left < right
+	})
 }
