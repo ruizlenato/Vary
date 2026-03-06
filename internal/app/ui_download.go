@@ -32,46 +32,66 @@ func NewDownloadScreen() *DownloadScreen {
 }
 
 func (d *DownloadScreen) StartDownload(state *AppState) {
+	if state.IsDownloading {
+		return
+	}
+	state.IsDownloading = true
+	d.progress = 0
+	state.DownloadProgress = 0
+	state.DownloadStatus = "Starting..."
+
 	ctx, cancel := context.WithCancel(context.Background())
 	d.cancelFunc = cancel
 
 	go func() {
+		fail := func(prefix string, err error) {
+			msg := prefix + err.Error()
+			state.SetStatus(msg, true)
+			state.DownloadStatus = msg
+		}
+
+		setStage := func(status string, p float32) {
+			state.DownloadStatus = status
+			d.progress = p
+			state.DownloadProgress = float64(p)
+		}
+		advanceStage := func(status string, p float32) {
+			setStage(status, p)
+			time.Sleep(120 * time.Millisecond)
+		}
+
 		defer func() {
 			state.IsDownloading = false
+			d.cancelFunc = nil
 		}()
 
-		state.IsDownloading = true
-		state.DownloadStatus = "Checking releases..."
+		advanceStage("Checking releases...", 0.05)
 
 		appDir, err := storage.AppDataDir("Vary")
 		if err != nil {
-			state.SetStatus("Error: "+err.Error(), true)
-			state.SetScreen(ScreenHome)
+			fail("Error: ", err)
 			return
 		}
 
 		if err := storage.EnsureDir(appDir); err != nil {
-			state.SetStatus("Error: "+err.Error(), true)
-			state.SetScreen(ScreenHome)
+			fail("Error: ", err)
 			return
 		}
 
 		client := github.NewClient()
 		devMode := state.Config.IsDev()
 
-		state.DownloadStatus = "Fetching morphe-cli..."
+		advanceStage("Fetching morphe-cli...", 0.15)
 		cliRelease, err := client.GetCLIRelease(devMode)
 		if err != nil {
-			state.SetStatus("GitHub CLI error: "+err.Error(), true)
-			state.SetScreen(ScreenHome)
+			fail("GitHub CLI error: ", err)
 			return
 		}
 
-		state.DownloadStatus = "Fetching morphe-patches..."
+		advanceStage("Fetching morphe-patches...", 0.25)
 		patchesRelease, err := client.GetPatchesRelease(devMode)
 		if err != nil {
-			state.SetStatus("GitHub Patches error: "+err.Error(), true)
-			state.SetScreen(ScreenHome)
+			fail("GitHub Patches error: ", err)
 			return
 		}
 
@@ -83,15 +103,15 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 			state.DownloadStatus = fmt.Sprintf("Downloading %s...", cliRelease.AssetName)
 			progressCb := func(downloaded, total int64) {
 				if total > 0 {
-					d.progress = float32(downloaded) / float32(total)
+					raw := float32(downloaded) / float32(total)
+					d.progress = 0.25 + (raw * 0.30)
 					state.DownloadProgress = float64(d.progress)
 				}
 			}
 
 			err := downloader.Download(cliRelease.AssetURL, cliPath, progressCb)
 			if err != nil {
-				state.SetStatus("CLI download error: "+err.Error(), true)
-				state.SetScreen(ScreenHome)
+				fail("CLI download error: ", err)
 				return
 			}
 
@@ -101,6 +121,8 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 				DownloadedAt: time.Now().Format(time.RFC3339),
 			}
 			downloader.SaveState(cliStatePath, newState)
+		} else {
+			advanceStage("morphe-cli up to date", 0.55)
 		}
 
 		patchesPath := filepath.Join(appDir, patchesRelease.AssetName)
@@ -111,15 +133,15 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 			state.DownloadStatus = fmt.Sprintf("Downloading %s...", patchesRelease.AssetName)
 			progressCb := func(downloaded, total int64) {
 				if total > 0 {
-					d.progress = float32(downloaded) / float32(total)
+					raw := float32(downloaded) / float32(total)
+					d.progress = 0.55 + (raw * 0.30)
 					state.DownloadProgress = float64(d.progress)
 				}
 			}
 
 			err := downloader.Download(patchesRelease.AssetURL, patchesPath, progressCb)
 			if err != nil {
-				state.SetStatus("Patches download error: "+err.Error(), true)
-				state.SetScreen(ScreenHome)
+				fail("Patches download error: ", err)
 				return
 			}
 
@@ -129,17 +151,19 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 				DownloadedAt: time.Now().Format(time.RFC3339),
 			}
 			downloader.SaveState(patchesStatePath, newState)
+		} else {
+			advanceStage("morphe-patches up to date", 0.85)
 		}
 
-		state.DownloadStatus = "Listing packages..."
+		advanceStage("Listing packages...", 0.92)
 		executor := morphe.NewExecutor(cliPath, patchesPath)
 		packages, err := executor.ListPackages(ctx)
 		if err != nil {
-			state.SetStatus("Error: "+err.Error(), true)
-			state.SetScreen(ScreenHome)
+			fail("Error: ", err)
 			return
 		}
 
+		advanceStage("Done", 1.0)
 		state.SetPackages(packages)
 		state.SetStatus(fmt.Sprintf("%d packages found", len(packages)), false)
 		state.SetScreen(ScreenPackages)
@@ -230,10 +254,15 @@ func (d *DownloadScreen) HandleInput(gtx layout.Context, state *AppState) {
 		os.Exit(0)
 	}
 	for d.cancelBtn.Clicked(gtx) {
-		if d.cancelFunc != nil {
-			d.cancelFunc()
+		if state.IsDownloading {
+			if d.cancelFunc != nil {
+				d.cancelFunc()
+			}
+			state.DownloadStatus = "Canceled"
+			d.progress = 0
+			state.DownloadProgress = 0
+			state.IsDownloading = false
 		}
-		state.IsDownloading = false
 		state.SetScreen(ScreenHome)
 	}
 }
