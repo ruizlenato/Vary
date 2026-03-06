@@ -21,6 +21,7 @@ import (
 type PatchesScreen struct {
 	list        widget.List
 	search      widget.Editor
+	mui         *material.Theme
 	backBtn     widget.Clickable
 	closeBtn    widget.Clickable
 	continueBtn widget.Clickable
@@ -42,6 +43,7 @@ func NewPatchesScreen() *PatchesScreen {
 	search := widget.Editor{SingleLine: true, Submit: false}
 	return &PatchesScreen{
 		search:    search,
+		mui:       material.NewTheme(),
 		list:      widget.List{List: layout.List{Axis: layout.Vertical}},
 		backIcon:  mustIcon(backArrowIconVG),
 		closeIcon: mustIcon(closeIconVG),
@@ -147,12 +149,12 @@ func (p *PatchesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) l
 			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						title := material.H4(material.NewTheme(), "Select patches to include")
+						title := material.H4(p.mui, "Select patches to include")
 						title.Color = th.Text
 						return layout.Inset{Bottom: unit.Dp(6)}.Layout(gtx, title.Layout)
 					}),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						sub := material.Body2(material.NewTheme(), "Choose patches to apply")
+						sub := material.Body2(p.mui, "Choose patches to apply")
 						sub.Color = th.TextMuted
 						return layout.Inset{Bottom: unit.Dp(18)}.Layout(gtx, sub.Layout)
 					}),
@@ -183,7 +185,7 @@ func (p *PatchesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) l
 												height := gtx.Dp(unit.Dp(40))
 												gtx.Constraints.Min.Y = height
 												gtx.Constraints.Max.Y = height
-												editor := material.Editor(material.NewTheme(), &p.search, "Search patches")
+												editor := material.Editor(p.mui, &p.search, "Search patches")
 												editor.Color = th.Text
 												editor.HintColor = th.TextMuted
 												return p.outlinedField(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -193,7 +195,7 @@ func (p *PatchesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) l
 											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 												return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 													gtx.Constraints = layout.Exact(image.Pt(gtx.Dp(unit.Dp(108)), gtx.Dp(unit.Dp(40))))
-													btn := material.Button(material.NewTheme(), &p.selectAll, "Select all")
+													btn := material.Button(p.mui, &p.selectAll, "Select all")
 													btn.Background = color.NRGBA{R: 0, G: 0, B: 0, A: 255}
 													btn.Color = th.Text
 													return p.outlinedButton(gtx, btn.Layout)
@@ -202,7 +204,7 @@ func (p *PatchesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) l
 											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 												return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 													gtx.Constraints = layout.Exact(image.Pt(gtx.Dp(unit.Dp(126)), gtx.Dp(unit.Dp(40))))
-													btn := material.Button(material.NewTheme(), &p.deselectAll, "Deselect all")
+													btn := material.Button(p.mui, &p.deselectAll, "Deselect all")
 													btn.Background = color.NRGBA{R: 0, G: 0, B: 0, A: 255}
 													btn.Color = th.Text
 													return p.outlinedButton(gtx, btn.Layout)
@@ -217,22 +219,22 @@ func (p *PatchesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) l
 												selected++
 											}
 										}
-										meta := material.Body2(material.NewTheme(), fmt.Sprintf("%d selected • %d shown", selected, len(p.filtered)))
+										meta := material.Body2(p.mui, fmt.Sprintf("%d selected • %d shown", selected, len(p.filtered)))
 										meta.Color = th.TextMuted
 										return layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(8), Left: unit.Dp(2)}.Layout(gtx, meta.Layout)
 									}),
 									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 										if state.IsLoadingPatches {
-											msg := material.Body1(material.NewTheme(), "Loading patches...")
+											msg := material.Body1(p.mui, "Loading patches...")
 											msg.Color = th.TextMuted
 											return layout.Center.Layout(gtx, msg.Layout)
 										}
 										if len(p.filtered) == 0 {
-											msg := material.Body1(material.NewTheme(), "No patches found")
+											msg := material.Body1(p.mui, "No patches found")
 											msg.Color = th.TextMuted
 											return layout.Center.Layout(gtx, msg.Layout)
 										}
-										return material.List(material.NewTheme(), &p.list).Layout(gtx, len(p.filtered), func(gtx layout.Context, index int) layout.Dimensions {
+										return material.List(p.mui, &p.list).Layout(gtx, len(p.filtered), func(gtx layout.Context, index int) layout.Dimensions {
 											itemIndex := p.filtered[index]
 											return p.patchItem(gtx, th, &p.items[itemIndex])
 										})
@@ -242,7 +244,7 @@ func (p *PatchesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) l
 											btnWidth := gtx.Constraints.Max.X
 											btnHeight := gtx.Dp(unit.Dp(46))
 											gtx.Constraints = layout.Exact(image.Pt(btnWidth, btnHeight))
-											btn := material.Button(material.NewTheme(), &p.continueBtn, "Continue")
+											btn := material.Button(p.mui, &p.continueBtn, "Continue")
 											btn.Background = color.NRGBA{R: 0, G: 0, B: 0, A: 255}
 											btn.Color = th.Text
 											return p.outlinedButton(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -298,7 +300,7 @@ func (p *PatchesScreen) patchItem(gtx layout.Context, th *Theme, item *PatchItem
 			return layout.Flex{Alignment: layout.Start}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return layout.Inset{Top: unit.Dp(2), Right: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						cb := material.CheckBox(material.NewTheme(), &item.selected, "")
+						cb := material.CheckBox(p.mui, &item.selected, "")
 						cb.Color = color.NRGBA{R: 227, G: 227, B: 227, A: 255}
 						cb.IconColor = color.NRGBA{R: 227, G: 227, B: 227, A: 255}
 						return cb.Layout(gtx)
@@ -307,12 +309,12 @@ func (p *PatchesScreen) patchItem(gtx layout.Context, th *Theme, item *PatchItem
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							name := material.Label(material.NewTheme(), unit.Sp(16), item.patch.Name)
+							name := material.Label(p.mui, unit.Sp(16), item.patch.Name)
 							name.Color = th.Text
 							return name.Layout(gtx)
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							desc := material.Body2(material.NewTheme(), item.patch.Description)
+							desc := material.Body2(p.mui, item.patch.Description)
 							desc.Color = th.TextMuted
 							return layout.Inset{Top: unit.Dp(2)}.Layout(gtx, desc.Layout)
 						}),
