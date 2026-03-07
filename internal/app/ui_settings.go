@@ -17,6 +17,7 @@ type SettingsScreen struct {
 	saveBtn     widget.Clickable
 	backBtn     widget.Clickable
 	closeBtn    widget.Clickable
+	mui         *material.Theme
 	backIcon    *widget.Icon
 	closeIcon   *widget.Icon
 	lastMode    config.Mode
@@ -26,6 +27,7 @@ func NewSettingsScreen() *SettingsScreen {
 	return &SettingsScreen{
 		backIcon:  mustIcon(backArrowIconVG),
 		closeIcon: mustIcon(closeIconVG),
+		mui:       material.NewTheme(),
 	}
 }
 
@@ -57,7 +59,7 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return layout.Inset{Bottom: unit.Dp(40)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							title := material.H5(material.NewTheme(), "Settings")
+							title := material.H5(s.mui, "Settings")
 							title.Color = th.Text
 							return title.Layout(gtx)
 						})
@@ -70,7 +72,7 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 							Spacing:   layout.SpaceEvenly,
 						}.Layout(gtx,
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								label := material.Body1(material.NewTheme(), "Release Mode:")
+								label := material.Body1(s.mui, "Release Mode:")
 								label.Color = th.Text
 								return label.Layout(gtx)
 							}),
@@ -151,7 +153,7 @@ func (s *SettingsScreen) radioOption(gtx layout.Context, th *Theme, key, label s
 		Alignment: layout.Middle,
 	}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			radioBtn := material.RadioButton(material.NewTheme(), &s.releaseMode, key, label)
+			radioBtn := material.RadioButton(s.mui, &s.releaseMode, key, label)
 			radioBtn.Color = th.Text
 			radioBtn.IconColor = th.Primary
 			return radioBtn.Layout(gtx)
@@ -160,7 +162,7 @@ func (s *SettingsScreen) radioOption(gtx layout.Context, th *Theme, key, label s
 }
 
 func (s *SettingsScreen) button(gtx layout.Context, th *Theme, text string, btn *widget.Clickable) layout.Dimensions {
-	btnStyle := material.Button(material.NewTheme(), btn, text)
+	btnStyle := material.Button(s.mui, btn, text)
 	btnStyle.Background = th.Surface
 	btnStyle.Color = th.Text
 	return layout.Inset{

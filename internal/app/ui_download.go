@@ -27,10 +27,14 @@ type DownloadScreen struct {
 	cancelFunc context.CancelFunc
 	closeBtn   widget.Clickable
 	closeIcon  *widget.Icon
+	mui        *material.Theme
 }
 
 func NewDownloadScreen() *DownloadScreen {
-	return &DownloadScreen{closeIcon: mustIcon(closeIconVG)}
+	return &DownloadScreen{
+		closeIcon: mustIcon(closeIconVG),
+		mui:       material.NewTheme(),
+	}
 }
 
 func (d *DownloadScreen) StartDownload(state *AppState) {
@@ -266,7 +270,7 @@ func (d *DownloadScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return layout.Inset{Bottom: unit.Dp(40)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							title := material.H5(material.NewTheme(), "Updating")
+							title := material.H5(d.mui, "Updating")
 							title.Color = th.Text
 							return title.Layout(gtx)
 						})
@@ -274,7 +278,7 @@ func (d *DownloadScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return layout.Inset{Bottom: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							status := material.Body1(material.NewTheme(), state.DownloadStatus)
+							status := material.Body1(d.mui, state.DownloadStatus)
 							status.Color = th.Text
 							return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 								return status.Layout(gtx)
@@ -287,7 +291,7 @@ func (d *DownloadScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 							Left:  unit.Dp(40),
 							Right: unit.Dp(40),
 						}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							progressBar := material.ProgressBar(material.NewTheme(), d.progress)
+							progressBar := material.ProgressBar(d.mui, d.progress)
 							progressBar.Color = th.Primary
 							return progressBar.Layout(gtx)
 						})
@@ -295,7 +299,7 @@ func (d *DownloadScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return layout.Inset{Top: unit.Dp(40)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							btn := material.Button(material.NewTheme(), &d.cancelBtn, "Cancel")
+							btn := material.Button(d.mui, &d.cancelBtn, "Cancel")
 							btn.Background = th.Surface
 							btn.Color = th.Text
 							return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {

@@ -7,8 +7,6 @@ import (
 	"os"
 
 	"gioui.org/layout"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -16,6 +14,7 @@ import (
 
 type PackagesScreen struct {
 	list      widget.List
+	mui       *material.Theme
 	backBtn   widget.Clickable
 	items     []PackageItem
 	closeBtn  widget.Clickable
@@ -32,6 +31,7 @@ func NewPackagesScreen() *PackagesScreen {
 	backIcon := mustIcon(backArrowIconVG)
 	closeIcon := mustIcon(closeIconVG)
 	return &PackagesScreen{
+		mui: material.NewTheme(),
 		list: widget.List{
 			List: layout.List{
 				Axis: layout.Vertical,
@@ -62,7 +62,7 @@ func (p *PackagesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 				}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return layout.Inset{Bottom: unit.Dp(20)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							title := material.H5(material.NewTheme(), "Select Application")
+							title := material.H5(p.mui, "Select Application")
 							title.Color = th.Text
 							return title.Layout(gtx)
 						})
@@ -74,13 +74,13 @@ func (p *PackagesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 							Right: unit.Dp(24),
 						}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							if len(p.items) == 0 {
-								msg := material.Body2(material.NewTheme(), "No packages found")
+								msg := material.Body2(p.mui, "No packages found")
 								msg.Color = th.TextMuted
 								return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 									return msg.Layout(gtx)
 								})
 							}
-							return material.List(material.NewTheme(), &p.list).Layout(gtx, len(p.items), func(gtx layout.Context, index int) layout.Dimensions {
+							return material.List(p.mui, &p.list).Layout(gtx, len(p.items), func(gtx layout.Context, index int) layout.Dimensions {
 								return p.packageItem(gtx, th, &p.items[index])
 							})
 						})
@@ -91,7 +91,7 @@ func (p *PackagesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 							if len(state.FilteredPackages) > 0 {
 								statusText = fmt.Sprintf("%d apps | %s", len(state.FilteredPackages), statusText)
 							}
-							status := material.Body2(material.NewTheme(), statusText)
+							status := material.Body2(p.mui, statusText)
 							status.Color = th.TextMuted
 							return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 								return status.Layout(gtx)
@@ -138,45 +138,8 @@ func (p *PackagesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 			})
 		}),
 		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			if state.DeviceModel == "" {
-				return layout.Dimensions{}
-			}
-
-			status := "disconnected"
-			statusDot := color.NRGBA{R: 255, G: 116, B: 108, A: 255}
-			if state.DeviceConnected {
-				status = "connected"
-				statusDot = color.NRGBA{R: 128, G: 239, B: 128, A: 255}
-			}
-
 			gtx.Constraints = layout.Exact(originalConstraints.Max)
-			return layout.Inset{
-				Bottom: unit.Dp(38),
-				Left:   unit.Dp(38),
-			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.W.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.S.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return layout.Flex{
-							Axis:      layout.Horizontal,
-							Alignment: layout.Middle,
-						}.Layout(gtx,
-							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								size := gtx.Dp(unit.Dp(6))
-								return layout.Inset{Right: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									defer clip.UniformRRect(image.Rect(0, 0, size, size), size/2).Push(gtx.Ops).Pop()
-									paint.Fill(gtx.Ops, statusDot)
-									return layout.Dimensions{Size: image.Pt(size, size)}
-								})
-							}),
-							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								label := material.Body2(material.NewTheme(), state.DeviceModel+" "+status)
-								label.Color = color.NRGBA{R: 227, G: 227, B: 227, A: 255}
-								return label.Layout(gtx)
-							}),
-						)
-					})
-				})
-			})
+			return layoutDeviceStatusBadge(gtx, state, p.mui)
 		}),
 	)
 
@@ -197,18 +160,13 @@ func (p *PackagesScreen) packageItem(gtx layout.Context, th *Theme, item *Packag
 		return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints = layout.Exact(image.Pt(itemWidth, itemHeight))
 			return item.clicked.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				outer := clip.UniformRRect(image.Rect(0, 0, itemWidth, itemHeight), gtx.Dp(unit.Dp(4)))
-				paint.FillShape(gtx.Ops, color.NRGBA{R: 95, G: 95, B: 95, A: 255}, outer.Op(gtx.Ops))
-
-				inner := image.Rect(1, 1, itemWidth-1, itemHeight-1)
-				innerRRect := clip.UniformRRect(inner, gtx.Dp(unit.Dp(4)))
-				paint.FillShape(gtx.Ops, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, innerRRect.Op(gtx.Ops))
-
-				return layout.Inset{Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					label := material.Body1(material.NewTheme(), item.label)
-					label.Color = th.Text
-					return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return label.Layout(gtx)
+				return layoutOutlinedSurface(gtx, unit.Dp(4), color.NRGBA{R: 95, G: 95, B: 95, A: 255}, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						label := material.Body1(p.mui, item.label)
+						label.Color = th.Text
+						return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return label.Layout(gtx)
+						})
 					})
 				})
 			})

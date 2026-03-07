@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"gioui.org/layout"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -35,8 +33,11 @@ type PatchesScreen struct {
 }
 
 type PatchItem struct {
-	patch    morphe.Patch
-	selected widget.Bool
+	patch     morphe.Patch
+	selected  widget.Bool
+	nameLower string
+	descLower string
+	shortDesc string
 }
 
 func NewPatchesScreen() *PatchesScreen {
@@ -110,6 +111,9 @@ func (p *PatchesScreen) syncItems(state *AppState) {
 	p.items = make([]PatchItem, len(state.Patches))
 	for i, patch := range state.Patches {
 		p.items[i].patch = patch
+		p.items[i].nameLower = strings.ToLower(patch.Name)
+		p.items[i].descLower = strings.ToLower(patch.Description)
+		p.items[i].shortDesc = truncateDescription(patch.Description, 120)
 		if selected, ok := previous[patch.Name]; ok {
 			p.items[i].selected.Value = selected
 		} else {
@@ -127,9 +131,7 @@ func (p *PatchesScreen) applyFilter() {
 			p.filtered = append(p.filtered, i)
 			continue
 		}
-		name := strings.ToLower(p.items[i].patch.Name)
-		desc := strings.ToLower(p.items[i].patch.Description)
-		if strings.Contains(name, query) || strings.Contains(desc, query) {
+		if strings.Contains(p.items[i].nameLower, query) || strings.Contains(p.items[i].descLower, query) {
 			p.filtered = append(p.filtered, i)
 		}
 	}
@@ -170,89 +172,84 @@ func (p *PatchesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) l
 
 						return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							gtx.Constraints = layout.Exact(image.Pt(cardWidth, cardHeight))
-							outer := clip.UniformRRect(image.Rect(0, 0, cardWidth, cardHeight), gtx.Dp(unit.Dp(8)))
-							paint.FillShape(gtx.Ops, color.NRGBA{R: 78, G: 78, B: 78, A: 255}, outer.Op(gtx.Ops))
-
-							inner := image.Rect(1, 1, cardWidth-1, cardHeight-1)
-							innerRRect := clip.UniformRRect(inner, gtx.Dp(unit.Dp(8)))
-							paint.FillShape(gtx.Ops, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, innerRRect.Op(gtx.Ops))
-
-							return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(10), Right: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-											layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-												height := gtx.Dp(unit.Dp(40))
-												gtx.Constraints.Min.Y = height
-												gtx.Constraints.Max.Y = height
-												editor := material.Editor(p.mui, &p.search, "Search patches")
-												editor.Color = th.Text
-												editor.HintColor = th.TextMuted
-												return p.outlinedField(gtx, func(gtx layout.Context) layout.Dimensions {
-													return layout.Inset{Left: unit.Dp(10), Right: unit.Dp(10), Top: unit.Dp(8), Bottom: unit.Dp(8)}.Layout(gtx, editor.Layout)
-												})
-											}),
-											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-												return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-													gtx.Constraints = layout.Exact(image.Pt(gtx.Dp(unit.Dp(108)), gtx.Dp(unit.Dp(40))))
-													btn := material.Button(p.mui, &p.selectAll, "Select all")
-													btn.Background = color.NRGBA{R: 0, G: 0, B: 0, A: 255}
-													btn.Color = th.Text
-													return p.outlinedButton(gtx, btn.Layout)
-												})
-											}),
-											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-												return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-													gtx.Constraints = layout.Exact(image.Pt(gtx.Dp(unit.Dp(126)), gtx.Dp(unit.Dp(40))))
-													btn := material.Button(p.mui, &p.deselectAll, "Deselect all")
-													btn.Background = color.NRGBA{R: 0, G: 0, B: 0, A: 255}
-													btn.Color = th.Text
-													return p.outlinedButton(gtx, btn.Layout)
-												})
-											}),
-										)
-									}),
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										selected := 0
-										for i := range p.items {
-											if p.items[i].selected.Value {
-												selected++
+							return layoutOutlinedSurface(gtx, unit.Dp(8), color.NRGBA{R: 78, G: 78, B: 78, A: 255}, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, func(gtx layout.Context) layout.Dimensions {
+								return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(10), Right: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+												layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+													height := gtx.Dp(unit.Dp(40))
+													gtx.Constraints.Min.Y = height
+													gtx.Constraints.Max.Y = height
+													editor := material.Editor(p.mui, &p.search, "Search patches")
+													editor.Color = th.Text
+													editor.HintColor = th.TextMuted
+													return p.outlinedField(gtx, func(gtx layout.Context) layout.Dimensions {
+														return layout.Inset{Left: unit.Dp(10), Right: unit.Dp(10), Top: unit.Dp(8), Bottom: unit.Dp(8)}.Layout(gtx, editor.Layout)
+													})
+												}),
+												layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+													return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+														gtx.Constraints = layout.Exact(image.Pt(gtx.Dp(unit.Dp(108)), gtx.Dp(unit.Dp(40))))
+														btn := material.Button(p.mui, &p.selectAll, "Select all")
+														btn.Background = color.NRGBA{R: 0, G: 0, B: 0, A: 255}
+														btn.Color = th.Text
+														return p.outlinedButton(gtx, btn.Layout)
+													})
+												}),
+												layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+													return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+														gtx.Constraints = layout.Exact(image.Pt(gtx.Dp(unit.Dp(126)), gtx.Dp(unit.Dp(40))))
+														btn := material.Button(p.mui, &p.deselectAll, "Deselect all")
+														btn.Background = color.NRGBA{R: 0, G: 0, B: 0, A: 255}
+														btn.Color = th.Text
+														return p.outlinedButton(gtx, btn.Layout)
+													})
+												}),
+											)
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											selected := 0
+											for i := range p.items {
+												if p.items[i].selected.Value {
+													selected++
+												}
 											}
-										}
-										meta := material.Body2(p.mui, fmt.Sprintf("%d selected • %d shown", selected, len(p.filtered)))
-										meta.Color = th.TextMuted
-										return layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(8), Left: unit.Dp(2)}.Layout(gtx, meta.Layout)
-									}),
-									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-										if state.IsLoadingPatches {
-											msg := material.Body1(p.mui, "Loading patches...")
-											msg.Color = th.TextMuted
-											return layout.Center.Layout(gtx, msg.Layout)
-										}
-										if len(p.filtered) == 0 {
-											msg := material.Body1(p.mui, "No patches found")
-											msg.Color = th.TextMuted
-											return layout.Center.Layout(gtx, msg.Layout)
-										}
-										return material.List(p.mui, &p.list).Layout(gtx, len(p.filtered), func(gtx layout.Context, index int) layout.Dimensions {
-											itemIndex := p.filtered[index]
-											return p.patchItem(gtx, th, &p.items[itemIndex])
-										})
-									}),
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										return layout.Inset{Top: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-											btnWidth := gtx.Constraints.Max.X
-											btnHeight := gtx.Dp(unit.Dp(46))
-											gtx.Constraints = layout.Exact(image.Pt(btnWidth, btnHeight))
-											btn := material.Button(p.mui, &p.continueBtn, "Continue")
-											btn.Background = color.NRGBA{R: 0, G: 0, B: 0, A: 255}
-											btn.Color = th.Text
-											return p.outlinedButton(gtx, func(gtx layout.Context) layout.Dimensions {
-												return btn.Layout(gtx)
+											meta := material.Body2(p.mui, fmt.Sprintf("%d selected • %d shown", selected, len(p.filtered)))
+											meta.Color = th.TextMuted
+											return layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(8), Left: unit.Dp(2)}.Layout(gtx, meta.Layout)
+										}),
+										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+											if state.IsLoadingPatches {
+												msg := material.Body1(p.mui, "Loading patches...")
+												msg.Color = th.TextMuted
+												return layout.Center.Layout(gtx, msg.Layout)
+											}
+											if len(p.filtered) == 0 {
+												msg := material.Body1(p.mui, "No patches found")
+												msg.Color = th.TextMuted
+												return layout.Center.Layout(gtx, msg.Layout)
+											}
+											return material.List(p.mui, &p.list).Layout(gtx, len(p.filtered), func(gtx layout.Context, index int) layout.Dimensions {
+												itemIndex := p.filtered[index]
+												return p.patchItem(gtx, th, &p.items[itemIndex])
 											})
-										})
-									}),
-								)
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												btnWidth := gtx.Constraints.Max.X
+												btnHeight := gtx.Dp(unit.Dp(46))
+												gtx.Constraints = layout.Exact(image.Pt(btnWidth, btnHeight))
+												btn := material.Button(p.mui, &p.continueBtn, "Continue")
+												btn.Background = color.NRGBA{R: 0, G: 0, B: 0, A: 255}
+												btn.Color = th.Text
+												return p.outlinedButton(gtx, func(gtx layout.Context) layout.Dimensions {
+													return btn.Layout(gtx)
+												})
+											})
+										}),
+									)
+								})
 							})
 						})
 					}),
@@ -314,7 +311,7 @@ func (p *PatchesScreen) patchItem(gtx layout.Context, th *Theme, item *PatchItem
 							return name.Layout(gtx)
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							desc := material.Body2(p.mui, item.patch.Description)
+							desc := material.Body2(p.mui, item.shortDesc)
 							desc.Color = th.TextMuted
 							return layout.Inset{Top: unit.Dp(2)}.Layout(gtx, desc.Layout)
 						}),
@@ -325,40 +322,22 @@ func (p *PatchesScreen) patchItem(gtx layout.Context, th *Theme, item *PatchItem
 	})
 }
 
-func (p *PatchesScreen) outlinedButton(gtx layout.Context, content layout.Widget) layout.Dimensions {
-	border := gtx.Dp(unit.Dp(1))
-	max := gtx.Constraints.Max
-	if max.X <= 0 || max.Y <= 0 {
-		return content(gtx)
+func truncateDescription(text string, limit int) string {
+	if limit <= 0 || len(text) <= limit {
+		return text
 	}
+	if limit <= 3 {
+		return text[:limit]
+	}
+	return text[:limit-3] + "..."
+}
 
-	outer := clip.UniformRRect(image.Rect(0, 0, max.X, max.Y), gtx.Dp(unit.Dp(6)))
-	paint.FillShape(gtx.Ops, color.NRGBA{R: 120, G: 120, B: 120, A: 255}, outer.Op(gtx.Ops))
-	innerRect := image.Rect(border, border, max.X-border, max.Y-border)
-	inner := clip.UniformRRect(innerRect, gtx.Dp(unit.Dp(6)))
-	paint.FillShape(gtx.Ops, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, inner.Op(gtx.Ops))
-
-	return layout.Inset{
-		Top:    unit.Dp(1),
-		Bottom: unit.Dp(1),
-		Left:   unit.Dp(1),
-		Right:  unit.Dp(1),
-	}.Layout(gtx, content)
+func (p *PatchesScreen) outlinedButton(gtx layout.Context, content layout.Widget) layout.Dimensions {
+	return layoutOutlinedSurface(gtx, unit.Dp(6), color.NRGBA{R: 120, G: 120, B: 120, A: 255}, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, content)
 }
 
 func (p *PatchesScreen) outlinedField(gtx layout.Context, content layout.Widget) layout.Dimensions {
-	max := gtx.Constraints.Max
-	if max.X <= 0 || max.Y <= 0 {
-		return content(gtx)
-	}
-
-	outer := clip.UniformRRect(image.Rect(0, 0, max.X, max.Y), gtx.Dp(unit.Dp(6)))
-	paint.FillShape(gtx.Ops, color.NRGBA{R: 90, G: 90, B: 90, A: 255}, outer.Op(gtx.Ops))
-	innerRect := image.Rect(1, 1, max.X-1, max.Y-1)
-	inner := clip.UniformRRect(innerRect, gtx.Dp(unit.Dp(6)))
-	paint.FillShape(gtx.Ops, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, inner.Op(gtx.Ops))
-
-	return layout.Inset{Top: unit.Dp(1), Bottom: unit.Dp(1), Left: unit.Dp(1), Right: unit.Dp(1)}.Layout(gtx, content)
+	return layoutOutlinedSurface(gtx, unit.Dp(6), color.NRGBA{R: 90, G: 90, B: 90, A: 255}, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, content)
 }
 
 func (p *PatchesScreen) HandleInput(gtx layout.Context, state *AppState) {

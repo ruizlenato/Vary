@@ -18,12 +18,16 @@ type HomeScreen struct {
 	settingsBtn       widget.Clickable
 	closeBtn          widget.Clickable
 	closeIcon         *widget.Icon
+	mui               *material.Theme
 	OnStartClicked    func()
 	OnSettingsClicked func()
 }
 
 func NewHomeScreen() *HomeScreen {
-	return &HomeScreen{closeIcon: mustIcon(closeIconVG)}
+	return &HomeScreen{
+		closeIcon: mustIcon(closeIconVG),
+		mui:       material.NewTheme(),
+	}
 }
 
 func (h *HomeScreen) Layout(gtx layout.Context, th *Theme, state *AppState) layout.Dimensions {
@@ -40,7 +44,7 @@ func (h *HomeScreen) Layout(gtx layout.Context, th *Theme, state *AppState) layo
 				}.Layout(gtx,
 
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						title := material.H2(material.NewTheme(), "Vary")
+						title := material.H2(h.mui, "Vary")
 						title.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 						return layout.Inset{Bottom: unit.Dp(32)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							return title.Layout(gtx)
@@ -55,10 +59,10 @@ func (h *HomeScreen) Layout(gtx layout.Context, th *Theme, state *AppState) layo
 								Spacing:   layout.SpaceEvenly,
 							}.Layout(gtx,
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return h.button(gtx, th, "Start", &h.startBtn)
+									return h.button(gtx, "Start", &h.startBtn)
 								}),
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return h.button(gtx, th, "Settings", &h.settingsBtn)
+									return h.button(gtx, "Settings", &h.settingsBtn)
 								}),
 							)
 						})
@@ -87,50 +91,15 @@ func (h *HomeScreen) Layout(gtx layout.Context, th *Theme, state *AppState) layo
 		}),
 
 		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			if state.DeviceModel == "" {
-				return layout.Dimensions{}
-			}
-			status := "disconnected"
-			statusDot := color.NRGBA{R: 255, G: 116, B: 108, A: 255}
-			if state.DeviceConnected {
-				status = "connected"
-				statusDot = color.NRGBA{R: 128, G: 239, B: 128, A: 255}
-			}
 			gtx.Constraints = layout.Exact(originalConstraints.Max)
-			return layout.Inset{
-				Bottom: unit.Dp(38),
-				Left:   unit.Dp(38),
-			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.W.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.S.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return layout.Flex{
-							Axis:      layout.Horizontal,
-							Alignment: layout.Middle,
-						}.Layout(gtx,
-							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								size := gtx.Dp(unit.Dp(6))
-								return layout.Inset{Right: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									defer clip.UniformRRect(image.Rect(0, 0, size, size), size/2).Push(gtx.Ops).Pop()
-									paint.Fill(gtx.Ops, statusDot)
-									return layout.Dimensions{Size: image.Pt(size, size)}
-								})
-							}),
-							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								label := material.Body2(material.NewTheme(), state.DeviceModel+" "+status)
-								label.Color = color.NRGBA{R: 227, G: 227, B: 227, A: 255}
-								return label.Layout(gtx)
-							}),
-						)
-					})
-				})
-			})
+			return layoutDeviceStatusBadge(gtx, state, h.mui)
 		}),
 	)
 
 	return layout.Dimensions{Size: originalConstraints.Max}
 }
 
-func (h *HomeScreen) button(gtx layout.Context, th *Theme, text string, btn *widget.Clickable) layout.Dimensions {
+func (h *HomeScreen) button(gtx layout.Context, text string, btn *widget.Clickable) layout.Dimensions {
 	buttonWidth := gtx.Dp(unit.Dp(150))
 	buttonHeight := gtx.Dp(unit.Dp(50))
 	borderColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255}
@@ -152,7 +121,7 @@ func (h *HomeScreen) button(gtx layout.Context, th *Theme, text string, btn *wid
 			innerRRect := clip.UniformRRect(innerRect, innerRadius)
 			paint.FillShape(gtx.Ops, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, innerRRect.Op(gtx.Ops))
 			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				label := material.Label(material.NewTheme(), unit.Sp(15), text)
+				label := material.Label(h.mui, unit.Sp(15), text)
 				label.Color = borderColor
 				return label.Layout(gtx)
 			})
