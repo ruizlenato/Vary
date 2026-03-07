@@ -62,7 +62,7 @@ func (p *PatchLogsScreen) StartPatch(state *AppState) {
 
 	go func() {
 		executor := morphe.NewExecutor(state.CLIPath, state.PatchesPath)
-		err := executor.PatchAppWithLogs(context.Background(), inputFile, selected, func(line string, isErr bool) {
+		err := executor.PatchAppWithLogs(context.Background(), inputFile, selected, state.Config.CustomKeystorePath, func(line string, isErr bool) {
 			if isErr {
 				state.AppendPatchLog("[ERR] " + line)
 				return

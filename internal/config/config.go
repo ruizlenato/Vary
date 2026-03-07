@@ -16,7 +16,8 @@ const (
 )
 
 type Config struct {
-	Mode Mode `json:"mode"`
+	Mode               Mode   `json:"mode"`
+	CustomKeystorePath string `json:"customKeystorePath,omitempty"`
 }
 
 func Default() *Config {

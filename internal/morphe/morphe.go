@@ -90,15 +90,15 @@ func (e *Executor) ListCompatibleVersions(ctx context.Context, packageName strin
 	return ParseCompatibleVersions(stdout.String()), nil
 }
 
-func (e *Executor) PatchApp(ctx context.Context, inputFile string, includePatches []string) error {
-	return e.patchApp(ctx, inputFile, includePatches, nil)
+func (e *Executor) PatchApp(ctx context.Context, inputFile string, includePatches []string, customKeystorePath string) error {
+	return e.patchApp(ctx, inputFile, includePatches, customKeystorePath, nil)
 }
 
-func (e *Executor) PatchAppWithLogs(ctx context.Context, inputFile string, includePatches []string, onLog func(line string, isErr bool)) error {
-	return e.patchApp(ctx, inputFile, includePatches, onLog)
+func (e *Executor) PatchAppWithLogs(ctx context.Context, inputFile string, includePatches []string, customKeystorePath string, onLog func(line string, isErr bool)) error {
+	return e.patchApp(ctx, inputFile, includePatches, customKeystorePath, onLog)
 }
 
-func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatches []string, onLog func(line string, isErr bool)) error {
+func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatches []string, customKeystorePath string, onLog func(line string, isErr bool)) error {
 	if err := e.checkJava(); err != nil {
 		return err
 	}
@@ -117,15 +117,32 @@ func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatche
 		}
 		args = append(args, "-e", name)
 	}
-	args = append(args, inputFile)
-
-	cmd := exec.CommandContext(ctx, "java", args...)
+	cmd := exec.CommandContext(ctx, "java")
 	appDir, err := storage.AppDataDir("Vary")
 	if err == nil {
 		if mkErr := storage.EnsureDir(appDir); mkErr == nil {
 			cmd.Dir = appDir
 		}
 	}
+
+	defaultKeystore := ""
+	shouldPromoteGeneratedKeystore := false
+	customKeystorePath = strings.TrimSpace(customKeystorePath)
+	if cmd.Dir != "" {
+		defaultKeystore = filepath.Join(cmd.Dir, "vary.keystore")
+	}
+
+	if customKeystorePath != "" && storage.FileExists(customKeystorePath) {
+		args = append(args, "--keystore", customKeystorePath)
+	} else if defaultKeystore != "" && storage.FileExists(defaultKeystore) {
+		args = append(args, "--keystore", defaultKeystore)
+	} else if defaultKeystore != "" {
+		shouldPromoteGeneratedKeystore = true
+	}
+
+	args = append(args, inputFile)
+	cmd.Args = append(cmd.Args, args...)
+
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -187,6 +204,19 @@ func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatche
 		emit("Output file: "+movedPath, false)
 	}
 
+	if shouldPromoteGeneratedKeystore {
+		if generatedKeystore, keyErr := findLatestGeneratedKeystore(cmd.Dir, startedAt); keyErr == nil && generatedKeystore != "" {
+			if !samePath(generatedKeystore, defaultKeystore) {
+				if err := os.Rename(generatedKeystore, defaultKeystore); err != nil {
+					if copyErr := copyFile(generatedKeystore, defaultKeystore); copyErr == nil {
+						_ = os.Remove(generatedKeystore)
+					}
+				}
+			}
+			emit("Keystore ready: "+defaultKeystore, false)
+		}
+	}
+
 	return nil
 }
 
@@ -242,6 +272,42 @@ func findLatestGeneratedAPK(dir, inputBase string, since time.Time) (string, err
 			continue
 		}
 		full := filepath.Join(dir, name)
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(since.Add(-2 * time.Second)) {
+			continue
+		}
+		if best == "" || info.ModTime().After(bestTime) {
+			best = full
+			bestTime = info.ModTime()
+		}
+	}
+
+	return best, nil
+}
+
+func findLatestGeneratedKeystore(dir string, since time.Time) (string, error) {
+	if dir == "" {
+		return "", nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+
+	best := ""
+	bestTime := time.Time{}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := strings.ToLower(entry.Name())
+		if !strings.HasSuffix(name, ".keystore") {
+			continue
+		}
+		full := filepath.Join(dir, entry.Name())
 		info, err := entry.Info()
 		if err != nil {
 			continue
