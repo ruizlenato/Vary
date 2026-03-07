@@ -221,6 +221,10 @@ func (p *PatchLogsScreen) Layout(gtx layout.Context, th *Theme, state *AppState)
 				})
 			})
 		}),
+		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints = layout.Exact(originalConstraints.Max)
+			return layoutDeviceStatusBadge(gtx, state, p.mui)
+		}),
 	)
 
 	return layout.Dimensions{Size: originalConstraints.Max}
