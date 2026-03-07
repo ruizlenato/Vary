@@ -147,31 +147,42 @@ func (p *PatchLogsScreen) Layout(gtx layout.Context, th *Theme, state *AppState)
 							return layout.Dimensions{}
 						}
 						return layout.Inset{Top: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return layout.Flex{Axis: layout.Horizontal, Spacing: layout.SpaceEvenly, Alignment: layout.Middle}.Layout(gtx,
-								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-									return p.actionButton(gtx, th, &p.copyBtn, "Copy logs")
-								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return layout.Spacer{Width: unit.Dp(10)}.Layout(gtx)
-								}),
-								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-									return p.actionButton(gtx, th, &p.openDirBtn, "Open output folder")
-								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									if !state.DeviceConnected {
-										return layout.Dimensions{}
-									}
-									return layout.Spacer{Width: unit.Dp(10)}.Layout(gtx)
-								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									if !state.DeviceConnected {
-										return layout.Dimensions{}
-									}
-									btnWidth := min(gtx.Dp(unit.Dp(220)), gtx.Constraints.Max.X)
-									gtx.Constraints = layout.Exact(image.Pt(btnWidth, gtx.Dp(unit.Dp(44))))
-									return p.actionButton(gtx, th, &p.installBtn, "Install on device")
-								}),
-							)
+							actionWidth := min(gtx.Constraints.Max.X-gtx.Dp(unit.Dp(80)), gtx.Dp(unit.Dp(840)))
+							if actionWidth < gtx.Dp(unit.Dp(360)) {
+								actionWidth = gtx.Constraints.Max.X - gtx.Dp(unit.Dp(24))
+							}
+							if actionWidth < gtx.Dp(unit.Dp(260)) {
+								actionWidth = gtx.Dp(unit.Dp(260))
+							}
+
+							return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								gtx.Constraints = layout.Exact(image.Pt(actionWidth, gtx.Dp(unit.Dp(44))))
+								return layout.Flex{Axis: layout.Horizontal, Spacing: layout.SpaceEvenly, Alignment: layout.Middle}.Layout(gtx,
+									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+										return p.actionButton(gtx, th, &p.copyBtn, "Copy logs")
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return layout.Spacer{Width: unit.Dp(10)}.Layout(gtx)
+									}),
+									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+										return p.actionButton(gtx, th, &p.openDirBtn, "Open output folder")
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										if !state.DeviceConnected {
+											return layout.Dimensions{}
+										}
+										return layout.Spacer{Width: unit.Dp(10)}.Layout(gtx)
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										if !state.DeviceConnected {
+											return layout.Dimensions{}
+										}
+										btnWidth := min(gtx.Dp(unit.Dp(220)), gtx.Constraints.Max.X)
+										gtx.Constraints = layout.Exact(image.Pt(btnWidth, gtx.Dp(unit.Dp(44))))
+										return p.actionButton(gtx, th, &p.installBtn, "Install on device")
+									}),
+								)
+							})
 						})
 					}),
 				)
