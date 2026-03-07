@@ -18,6 +18,7 @@ import (
 
 	"vary/internal/adb"
 	"vary/internal/morphe"
+	"vary/internal/storage"
 )
 
 type PatchLogsScreen struct {
@@ -291,42 +292,50 @@ func (p *PatchLogsScreen) actionButton(gtx layout.Context, th *Theme, btn *widge
 }
 
 func detectPatchedOutput(inputFile string, since time.Time) string {
-	if inputFile == "" {
-		return ""
+	searchDirs := make([]string, 0, 2)
+	if inputFile != "" {
+		searchDirs = append(searchDirs, filepath.Dir(inputFile))
 	}
-	dir := filepath.Dir(inputFile)
-	inputBase := filepath.Base(inputFile)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
+	if appDir, err := storage.AppDataDir("Vary"); err == nil {
+		searchDirs = append(searchDirs, appDir)
 	}
 
+	inputBase := filepath.Base(inputFile)
 	best := ""
 	bestTime := time.Time{}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if !strings.HasSuffix(strings.ToLower(name), ".apk") {
-			continue
-		}
-		if name == inputBase {
-			continue
-		}
-		full := filepath.Join(dir, name)
-		info, err := entry.Info()
+
+	for _, dir := range searchDirs {
+		entries, err := os.ReadDir(dir)
 		if err != nil {
 			continue
 		}
-		if info.ModTime().Before(since.Add(-2 * time.Second)) {
-			continue
-		}
-		if best == "" || info.ModTime().After(bestTime) {
-			best = full
-			bestTime = info.ModTime()
+
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if !strings.HasSuffix(strings.ToLower(name), ".apk") {
+				continue
+			}
+			if name == inputBase {
+				continue
+			}
+			full := filepath.Join(dir, name)
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			if info.ModTime().Before(since.Add(-2 * time.Second)) {
+				continue
+			}
+			if best == "" || info.ModTime().After(bestTime) {
+				best = full
+				bestTime = info.ModTime()
+			}
 		}
 	}
+
 	return best
 }
 

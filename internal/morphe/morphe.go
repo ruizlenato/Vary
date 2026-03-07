@@ -5,12 +5,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"vary/internal/storage"
 )
 
 type Executor struct {
@@ -115,6 +120,12 @@ func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatche
 	args = append(args, inputFile)
 
 	cmd := exec.CommandContext(ctx, "java", args...)
+	appDir, err := storage.AppDataDir("Vary")
+	if err == nil {
+		if mkErr := storage.EnsureDir(appDir); mkErr == nil {
+			cmd.Dir = appDir
+		}
+	}
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -147,6 +158,7 @@ func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatche
 	if err := cmd.Start(); err != nil {
 		return err
 	}
+	startedAt := time.Now()
 
 	var wg sync.WaitGroup
 	scan := func(scanner *bufio.Scanner, isErr bool) {
@@ -171,7 +183,115 @@ func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatche
 		return fmt.Errorf("failed to patch app: %w (stderr: %s)", err, errText)
 	}
 
+	if movedPath, moveErr := movePatchedOutputToInputDir(cmd.Dir, inputFile, startedAt); moveErr == nil && movedPath != "" {
+		emit("Output file: "+movedPath, false)
+	}
+
 	return nil
+}
+
+func movePatchedOutputToInputDir(workDir, inputFile string, since time.Time) (string, error) {
+	if workDir == "" || inputFile == "" {
+		return "", nil
+	}
+
+	inputDir := filepath.Dir(inputFile)
+	inputBase := filepath.Base(inputFile)
+
+	if samePath(workDir, inputDir) {
+		return "", nil
+	}
+
+	generated, err := findLatestGeneratedAPK(workDir, inputBase, since)
+	if err != nil || generated == "" {
+		return "", err
+	}
+
+	destination := filepath.Join(inputDir, filepath.Base(generated))
+	if samePath(generated, destination) {
+		return destination, nil
+	}
+
+	if err := os.Rename(generated, destination); err != nil {
+		if copyErr := copyFile(generated, destination); copyErr != nil {
+			return "", copyErr
+		}
+		_ = os.Remove(generated)
+	}
+
+	return destination, nil
+}
+
+func findLatestGeneratedAPK(dir, inputBase string, since time.Time) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+
+	best := ""
+	bestTime := time.Time{}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".apk") {
+			continue
+		}
+		if name == inputBase {
+			continue
+		}
+		full := filepath.Join(dir, name)
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(since.Add(-2 * time.Second)) {
+			continue
+		}
+		if best == "" || info.ModTime().After(bestTime) {
+			best = full
+			bestTime = info.ModTime()
+		}
+	}
+
+	return best, nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+
+	_, copyErr := io.Copy(out, in)
+	closeErr := out.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+
+	return nil
+}
+
+func samePath(a, b string) bool {
+	ca := filepath.Clean(a)
+	cb := filepath.Clean(b)
+	if ca == cb {
+		return true
+	}
+	if filepath.VolumeName(ca) != "" || filepath.VolumeName(cb) != "" {
+		return strings.EqualFold(ca, cb)
+	}
+	return false
 }
 
 func (e *Executor) checkJava() error {
