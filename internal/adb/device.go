@@ -153,6 +153,36 @@ func ABIForSerial(serial string) (string, error) {
 	return abi, nil
 }
 
+func InstallAPKOnFirstDevice(apkPath string) (string, error) {
+	serial, err := FirstConnectedSerial()
+	if err != nil {
+		return "", err
+	}
+	if serial == "" {
+		return "", errors.New("no connected adb device")
+	}
+	return InstallAPK(serial, apkPath)
+}
+
+func InstallAPK(serial, apkPath string) (string, error) {
+	if serial == "" {
+		return "", errors.New("missing adb serial")
+	}
+	if strings.TrimSpace(apkPath) == "" {
+		return "", errors.New("missing apk path")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	stdout, err := runAdbOutput(ctx, "-s", serial, "install", "-r", apkPath)
+	if err != nil {
+		return strings.TrimSpace(stdout), err
+	}
+
+	return strings.TrimSpace(stdout), nil
+}
+
 func WatchFirstDeviceModel(ctx context.Context, onChange func(model string)) {
 	if onChange == nil {
 		return

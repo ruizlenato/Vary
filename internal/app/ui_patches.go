@@ -219,6 +219,14 @@ func (p *PatchesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) l
 											meta.Color = th.TextMuted
 											return layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(8), Left: unit.Dp(2)}.Layout(gtx, meta.Layout)
 										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											if state.PatchStatus == "" {
+												return layout.Dimensions{}
+											}
+											status := material.Body2(p.mui, state.PatchStatus)
+											status.Color = th.TextMuted
+											return layout.Inset{Bottom: unit.Dp(8), Left: unit.Dp(2)}.Layout(gtx, status.Layout)
+										}),
 										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 											if state.IsLoadingPatches {
 												msg := material.Body1(p.mui, "Loading patches...")
@@ -240,7 +248,11 @@ func (p *PatchesScreen) Layout(gtx layout.Context, th *Theme, state *AppState) l
 												btnWidth := gtx.Constraints.Max.X
 												btnHeight := gtx.Dp(unit.Dp(46))
 												gtx.Constraints = layout.Exact(image.Pt(btnWidth, btnHeight))
-												btn := material.Button(p.mui, &p.continueBtn, "Continue")
+												buttonLabel := "Continue"
+												if state.IsApplyingPatches {
+													buttonLabel = "Patching..."
+												}
+												btn := material.Button(p.mui, &p.continueBtn, buttonLabel)
 												btn.Background = color.NRGBA{R: 0, G: 0, B: 0, A: 255}
 												btn.Color = th.Text
 												return p.outlinedButton(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -358,12 +370,40 @@ func (p *PatchesScreen) HandleInput(gtx layout.Context, state *AppState) {
 		}
 	}
 	for p.continueBtn.Clicked(gtx) {
+		if state.IsApplyingPatches {
+			continue
+		}
+		if state.SelectedInputFile == "" {
+			state.SetStatus("Select a local file before patching", true)
+			state.PatchStatus = "No input file selected"
+			state.SetScreen(ScreenSelectFile)
+			continue
+		}
+		if _, err := os.Stat(state.SelectedInputFile); err != nil {
+			state.SetStatus("Selected file not found", true)
+			state.PatchStatus = "Input file does not exist"
+			state.SetScreen(ScreenSelectFile)
+			continue
+		}
+
+		selectedPatches := make([]string, 0)
 		selected := 0
 		for i := range p.items {
 			if p.items[i].selected.Value {
 				selected++
+				selectedPatches = append(selectedPatches, p.items[i].patch.Name)
 			}
 		}
-		state.SetStatus(fmt.Sprintf("%d patches selected", selected), false)
+		if selected == 0 {
+			state.SetStatus("Select at least one patch", true)
+			state.PatchStatus = "No patches selected"
+			continue
+		}
+
+		state.SelectedPatches = selectedPatches
+		state.StartPatchRequested = true
+		state.PatchStatus = fmt.Sprintf("Applying %d patches...", selected)
+		state.SetStatus(state.PatchStatus, false)
+		state.SetScreen(ScreenPatchLogs)
 	}
 }

@@ -252,7 +252,7 @@ func (s *SelectFileScreen) Layout(gtx layout.Context, th *Theme, state *AppState
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								return layout.Flex{Axis: layout.Horizontal, Spacing: layout.SpaceEvenly, Alignment: layout.Middle}.Layout(gtx,
 									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-										return s.actionButton(gtx, th, &s.popupOpenBtn, "Search on DuckDuckGo")
+										return s.actionButton(gtx, th, &s.popupOpenBtn, "Search on Google")
 									}),
 									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 										return layout.Spacer{Width: unit.Dp(10)}.Layout(gtx)

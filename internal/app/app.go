@@ -14,6 +14,7 @@ const (
 	ScreenPackages
 	ScreenPatches
 	ScreenSelectFile
+	ScreenPatchLogs
 )
 
 type AppState struct {
@@ -26,19 +27,24 @@ type AppState struct {
 	DownloadProgress float64
 	DownloadStatus   string
 
-	Packages           []string
-	FilteredPackages   []string
-	SearchQuery        string
-	Patches            []morphe.Patch
-	SelectedPackage    string
-	CLIPath            string
-	PatchesPath        string
-	IsLoadingPatches   bool
-	PatchStatus        string
-	CompatibleVersions []string
-	IsLoadingVersions  bool
-	VersionStatus      string
-	SelectedInputFile  string
+	Packages            []string
+	FilteredPackages    []string
+	SearchQuery         string
+	Patches             []morphe.Patch
+	SelectedPackage     string
+	CLIPath             string
+	PatchesPath         string
+	IsLoadingPatches    bool
+	IsApplyingPatches   bool
+	StartPatchRequested bool
+	PatchStatus         string
+	SelectedPatches     []string
+	PatchLogs           []string
+	CompatibleVersions  []string
+	IsLoadingVersions   bool
+	VersionStatus       string
+	SelectedInputFile   string
+	PatchedOutputFile   string
 
 	StatusMessage string
 	StatusError   bool
@@ -52,6 +58,8 @@ func NewAppState(cfg *config.Config) *AppState {
 		FilteredPackages:   make([]string, 0),
 		Patches:            make([]morphe.Patch, 0),
 		CompatibleVersions: make([]string, 0),
+		SelectedPatches:    make([]string, 0),
+		PatchLogs:          make([]string, 0),
 		StatusMessage:      "Ready",
 	}
 }
@@ -76,6 +84,16 @@ func (s *AppState) SetPatches(patches []morphe.Patch) {
 
 func (s *AppState) SetCompatibleVersions(versions []string) {
 	s.CompatibleVersions = versions
+}
+
+func (s *AppState) AppendPatchLog(line string) {
+	if line == "" {
+		return
+	}
+	s.PatchLogs = append(s.PatchLogs, line)
+	if len(s.PatchLogs) > 500 {
+		s.PatchLogs = s.PatchLogs[len(s.PatchLogs)-500:]
+	}
 }
 
 func (s *AppState) FilterPackages(query string) {

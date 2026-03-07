@@ -1,6 +1,7 @@
 package morphe
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -81,6 +83,95 @@ func (e *Executor) ListCompatibleVersions(ctx context.Context, packageName strin
 	}
 
 	return ParseCompatibleVersions(stdout.String()), nil
+}
+
+func (e *Executor) PatchApp(ctx context.Context, inputFile string, includePatches []string) error {
+	return e.patchApp(ctx, inputFile, includePatches, nil)
+}
+
+func (e *Executor) PatchAppWithLogs(ctx context.Context, inputFile string, includePatches []string, onLog func(line string, isErr bool)) error {
+	return e.patchApp(ctx, inputFile, includePatches, onLog)
+}
+
+func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatches []string, onLog func(line string, isErr bool)) error {
+	if err := e.checkJava(); err != nil {
+		return err
+	}
+	if inputFile == "" {
+		return fmt.Errorf("missing input file")
+	}
+	if len(includePatches) == 0 {
+		return fmt.Errorf("no patches selected")
+	}
+
+	args := []string{"-jar", e.cliPath, "patch", "--patches", e.patchesPath, "--exclusive"}
+	for _, patch := range includePatches {
+		name := strings.TrimSpace(patch)
+		if name == "" {
+			continue
+		}
+		args = append(args, "-e", name)
+	}
+	args = append(args, inputFile)
+
+	cmd := exec.CommandContext(ctx, "java", args...)
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	var stderr bytes.Buffer
+	var mu sync.Mutex
+	emit := func(line string, isErr bool) {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			return
+		}
+		if isErr {
+			mu.Lock()
+			if stderr.Len() > 0 {
+				stderr.WriteByte('\n')
+			}
+			stderr.WriteString(trimmed)
+			mu.Unlock()
+		}
+		if onLog != nil {
+			onLog(trimmed, isErr)
+		}
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	scan := func(scanner *bufio.Scanner, isErr bool) {
+		defer wg.Done()
+		for scanner.Scan() {
+			emit(scanner.Text(), isErr)
+		}
+	}
+
+	stdoutScanner := bufio.NewScanner(stdoutPipe)
+	stderrScanner := bufio.NewScanner(stderrPipe)
+	wg.Add(2)
+	go scan(stdoutScanner, false)
+	go scan(stderrScanner, true)
+
+	wg.Wait()
+
+	if err := cmd.Wait(); err != nil {
+		mu.Lock()
+		errText := strings.TrimSpace(stderr.String())
+		mu.Unlock()
+		return fmt.Errorf("failed to patch app: %w (stderr: %s)", err, errText)
+	}
+
+	return nil
 }
 
 func (e *Executor) checkJava() error {
