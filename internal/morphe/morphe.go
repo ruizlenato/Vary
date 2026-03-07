@@ -204,6 +204,12 @@ func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatche
 		emit("Output file: "+movedPath, false)
 	}
 
+	if removed, cleanupErr := cleanupTemporaryPatchDirs(cmd.Dir, startedAt); cleanupErr == nil {
+		for _, path := range removed {
+			emit("Removed temporary folder: "+path, false)
+		}
+	}
+
 	if shouldPromoteGeneratedKeystore {
 		if generatedKeystore, keyErr := findLatestGeneratedKeystore(cmd.Dir, startedAt); keyErr == nil && generatedKeystore != "" {
 			if !samePath(generatedKeystore, defaultKeystore) {
@@ -218,6 +224,44 @@ func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatche
 	}
 
 	return nil
+}
+
+func cleanupTemporaryPatchDirs(dir string, since time.Time) ([]string, error) {
+	if strings.TrimSpace(dir) == "" {
+		return nil, nil
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	removed := make([]string, 0)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, "-patched-temporary-files") {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(since.Add(-2 * time.Second)) {
+			continue
+		}
+
+		target := filepath.Join(dir, name)
+		if err := os.RemoveAll(target); err != nil {
+			continue
+		}
+		removed = append(removed, target)
+	}
+
+	return removed, nil
 }
 
 func movePatchedOutputToInputDir(workDir, inputFile string, since time.Time) (string, error) {
