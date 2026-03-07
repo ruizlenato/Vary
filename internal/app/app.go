@@ -13,6 +13,7 @@ const (
 	ScreenDownload
 	ScreenPackages
 	ScreenPatches
+	ScreenSelectFile
 )
 
 type AppState struct {
@@ -25,15 +26,19 @@ type AppState struct {
 	DownloadProgress float64
 	DownloadStatus   string
 
-	Packages         []string
-	FilteredPackages []string
-	SearchQuery      string
-	Patches          []morphe.Patch
-	SelectedPackage  string
-	CLIPath          string
-	PatchesPath      string
-	IsLoadingPatches bool
-	PatchStatus      string
+	Packages           []string
+	FilteredPackages   []string
+	SearchQuery        string
+	Patches            []morphe.Patch
+	SelectedPackage    string
+	CLIPath            string
+	PatchesPath        string
+	IsLoadingPatches   bool
+	PatchStatus        string
+	CompatibleVersions []string
+	IsLoadingVersions  bool
+	VersionStatus      string
+	SelectedInputFile  string
 
 	StatusMessage string
 	StatusError   bool
@@ -41,12 +46,13 @@ type AppState struct {
 
 func NewAppState(cfg *config.Config) *AppState {
 	return &AppState{
-		CurrentScreen:    ScreenHome,
-		Config:           cfg,
-		Packages:         make([]string, 0),
-		FilteredPackages: make([]string, 0),
-		Patches:          make([]morphe.Patch, 0),
-		StatusMessage:    "Ready",
+		CurrentScreen:      ScreenHome,
+		Config:             cfg,
+		Packages:           make([]string, 0),
+		FilteredPackages:   make([]string, 0),
+		Patches:            make([]morphe.Patch, 0),
+		CompatibleVersions: make([]string, 0),
+		StatusMessage:      "Ready",
 	}
 }
 
@@ -66,6 +72,10 @@ func (s *AppState) SetPackages(packages []string) {
 
 func (s *AppState) SetPatches(patches []morphe.Patch) {
 	s.Patches = patches
+}
+
+func (s *AppState) SetCompatibleVersions(versions []string) {
+	s.CompatibleVersions = versions
 }
 
 func (s *AppState) FilterPackages(query string) {

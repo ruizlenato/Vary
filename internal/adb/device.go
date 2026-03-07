@@ -81,6 +81,18 @@ func FirstConnectedModel() (string, error) {
 	return ModelForSerial(serial)
 }
 
+func FirstConnectedABI() (string, error) {
+	serial, err := FirstConnectedSerial()
+	if err != nil {
+		return "", err
+	}
+	if serial == "" {
+		return "", nil
+	}
+
+	return ABIForSerial(serial)
+}
+
 func FirstConnectedSerial() (string, error) {
 	if _, err := adbCommandPath(); err != nil {
 		if errors.Is(err, errAdbUnavailable) {
@@ -118,6 +130,27 @@ func ModelForSerial(serial string) (string, error) {
 	}
 
 	return model, nil
+}
+
+func ABIForSerial(serial string) (string, error) {
+	if serial == "" {
+		return "", nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+
+	stdout, err := runAdbOutput(ctx, "-s", serial, "shell", "getprop", "ro.product.cpu.abi")
+	if err != nil {
+		return "", err
+	}
+
+	abi := strings.TrimSpace(stdout)
+	if abi == "" {
+		return "", errors.New("empty abi from adb")
+	}
+
+	return abi, nil
 }
 
 func WatchFirstDeviceModel(ctx context.Context, onChange func(model string)) {

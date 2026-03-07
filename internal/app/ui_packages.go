@@ -184,10 +184,13 @@ func (p *PackagesScreen) HandleInput(gtx layout.Context, state *AppState) {
 	for i := range p.items {
 		if p.items[i].clicked.Clicked(gtx) {
 			state.SelectedPackage = p.items[i].label
+			state.SelectedInputFile = ""
+			state.SetCompatibleVersions(nil)
+			state.VersionStatus = ""
 			state.SetPatches(nil)
 			state.PatchStatus = ""
 			state.SetStatus("Selected: "+p.items[i].label, false)
-			state.SetScreen(ScreenPatches)
+			state.SetScreen(ScreenSelectFile)
 		}
 	}
 }

@@ -65,6 +65,24 @@ func (e *Executor) ListPatches(ctx context.Context, packageName string) ([]Patch
 	return ParsePatches(stdout.String()), nil
 }
 
+func (e *Executor) ListCompatibleVersions(ctx context.Context, packageName string) ([]string, error) {
+	if err := e.checkJava(); err != nil {
+		return nil, err
+	}
+
+	cmd := exec.CommandContext(ctx, "java", "-jar", e.cliPath, "list-versions", e.patchesPath, "-f", packageName)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("failed to execute morphe-cli: %w (stderr: %s)", err, stderr.String())
+	}
+
+	return ParseCompatibleVersions(stdout.String()), nil
+}
+
 func (e *Executor) checkJava() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -163,4 +181,30 @@ func sortPatchesByName(patches []Patch) {
 		right := strings.ToLower(strings.TrimSpace(patches[j].Name))
 		return left < right
 	})
+}
+
+func ParseCompatibleVersions(output string) []string {
+	lines := strings.Split(output, "\n")
+	re := regexp.MustCompile(`^([0-9][0-9A-Za-z\.\-_]+)\s*\(`)
+	versions := make([]string, 0)
+	seen := make(map[string]bool)
+
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+		match := re.FindStringSubmatch(line)
+		if len(match) < 2 {
+			continue
+		}
+		version := strings.TrimSpace(match[1])
+		if version == "" || seen[version] {
+			continue
+		}
+		seen[version] = true
+		versions = append(versions, version)
+	}
+
+	return versions
 }
