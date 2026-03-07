@@ -345,7 +345,7 @@ func (s *SettingsScreen) HandleInput(gtx layout.Context, state *AppState) {
 }
 
 func copyKeystoreToAppData(sourcePath string) (string, error) {
-	appDir, err := storage.AppDataDir("Vary")
+	appDir, err := storage.AppDataDir("vary")
 	if err != nil {
 		return "", err
 	}
@@ -395,7 +395,7 @@ func removeImportedKeystoreFromAppData(path string) error {
 		return nil
 	}
 
-	appDir, err := storage.AppDataDir("Vary")
+	appDir, err := storage.AppDataDir("vary")
 	if err != nil {
 		return err
 	}

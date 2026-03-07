@@ -311,7 +311,7 @@ func detectPatchedOutput(inputFile string, since time.Time) string {
 	if inputFile != "" {
 		searchDirs = append(searchDirs, filepath.Dir(inputFile))
 	}
-	if appDir, err := storage.AppDataDir("Vary"); err == nil {
+	if appDir, err := storage.AppDataDir("vary"); err == nil {
 		searchDirs = append(searchDirs, appDir)
 	}
 

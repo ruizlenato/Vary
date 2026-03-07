@@ -64,7 +64,7 @@ func LoadPatchSelection(packageName string) ([]string, error) {
 }
 
 func packagePatchStateDir(packageName string) (string, error) {
-	appDir, err := storage.AppDataDir("Vary")
+	appDir, err := storage.AppDataDir("vary")
 	if err != nil {
 		return "", err
 	}

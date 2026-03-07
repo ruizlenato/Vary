@@ -73,7 +73,7 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 
 		advanceStage("Checking releases...", 0.05)
 
-		appDir, err := storage.AppDataDir("Vary")
+		appDir, err := storage.AppDataDir("vary")
 		if err != nil {
 			fail("Error: ", err)
 			return

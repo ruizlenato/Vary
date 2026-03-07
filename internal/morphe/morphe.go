@@ -118,7 +118,7 @@ func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatche
 		args = append(args, "-e", name)
 	}
 	cmd := exec.CommandContext(ctx, "java")
-	appDir, err := storage.AppDataDir("Vary")
+	appDir, err := storage.AppDataDir("vary")
 	if err == nil {
 		if mkErr := storage.EnsureDir(appDir); mkErr == nil {
 			cmd.Dir = appDir

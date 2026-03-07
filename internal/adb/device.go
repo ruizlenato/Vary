@@ -44,7 +44,7 @@ func EnsurePlatformTools(progress downloader.ProgressCallback) error {
 		return fmt.Errorf("unsupported OS for platform-tools: %s", runtime.GOOS)
 	}
 
-	appDir, err := storage.AppDataDir("Vary")
+	appDir, err := storage.AppDataDir("vary")
 	if err != nil {
 		return err
 	}
@@ -326,7 +326,7 @@ func adbCommandPath() (string, error) {
 }
 
 func bundledAdbPath() (string, error) {
-	appDir, err := storage.AppDataDir("Vary")
+	appDir, err := storage.AppDataDir("vary")
 	if err != nil {
 		return "", errAdbUnavailable
 	}

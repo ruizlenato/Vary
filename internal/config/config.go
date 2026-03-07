@@ -27,7 +27,7 @@ func Default() *Config {
 }
 
 func Load() (*Config, error) {
-	appDir, err := storage.AppDataDir("Vary")
+	appDir, err := storage.AppDataDir("vary")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get app data dir: %w", err)
 	}
@@ -50,7 +50,7 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) Save() error {
-	appDir, err := storage.AppDataDir("Vary")
+	appDir, err := storage.AppDataDir("vary")
 	if err != nil {
 		return fmt.Errorf("failed to get app data dir: %w", err)
 	}
