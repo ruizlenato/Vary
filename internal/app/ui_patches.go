@@ -84,6 +84,9 @@ func (p *PatchesScreen) StartLoadPatches(state *AppState) {
 		}
 
 		state.SetPatches(patches)
+		if saved, err := LoadPatchSelection(state.SelectedPackage); err == nil {
+			state.SelectedPatches = saved
+		}
 		state.PatchStatus = fmt.Sprintf("%d patches found", len(patches))
 		state.SetStatus(state.PatchStatus, false)
 	}()
@@ -109,6 +112,12 @@ func (p *PatchesScreen) syncItems(state *AppState) {
 	}
 
 	p.items = make([]PatchItem, len(state.Patches))
+	savedSelection := make(map[string]bool, len(state.SelectedPatches))
+	for _, patchName := range state.SelectedPatches {
+		savedSelection[patchName] = true
+	}
+	hasSavedSelection := len(savedSelection) > 0
+
 	for i, patch := range state.Patches {
 		p.items[i].patch = patch
 		p.items[i].nameLower = strings.ToLower(patch.Name)
@@ -116,6 +125,8 @@ func (p *PatchesScreen) syncItems(state *AppState) {
 		p.items[i].shortDesc = truncateDescription(patch.Description, 120)
 		if selected, ok := previous[patch.Name]; ok {
 			p.items[i].selected.Value = selected
+		} else if hasSavedSelection {
+			p.items[i].selected.Value = savedSelection[patch.Name]
 		} else {
 			p.items[i].selected.Value = patch.Enabled
 		}
@@ -405,6 +416,9 @@ func (p *PatchesScreen) HandleInput(gtx layout.Context, state *AppState) {
 		}
 
 		state.SelectedPatches = selectedPatches
+		if err := SavePatchSelection(state.SelectedPackage, selectedPatches); err != nil {
+			state.SetStatus("Could not save patch selection: "+err.Error(), true)
+		}
 		state.StartPatchRequested = true
 		state.PatchStatus = fmt.Sprintf("Applying %d patches...", selected)
 		state.SetStatus(state.PatchStatus, false)

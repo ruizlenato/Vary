@@ -185,6 +185,7 @@ func (p *PackagesScreen) HandleInput(gtx layout.Context, state *AppState) {
 		if p.items[i].clicked.Clicked(gtx) {
 			state.SelectedPackage = p.items[i].label
 			state.SelectedInputFile = ""
+			state.SelectedPatches = nil
 			state.SetCompatibleVersions(nil)
 			state.VersionStatus = ""
 			state.SetPatches(nil)
