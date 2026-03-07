@@ -59,7 +59,7 @@ func (e *Executor) ListPatches(ctx context.Context, packageName string) ([]Patch
 		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, "java", "-jar", e.cliPath, "list-patches", e.patchesPath, "-f", packageName)
+	cmd := exec.CommandContext(ctx, "java", "-jar", e.cliPath, "list-patches", "--patches", e.patchesPath, "-f", packageName)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
