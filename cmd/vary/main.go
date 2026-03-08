@@ -5,8 +5,10 @@ import (
 	"os"
 
 	giouiApp "gioui.org/app"
+	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
+	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/x/explorer"
@@ -75,6 +77,10 @@ func main() {
 			case giouiApp.FrameEvent:
 				gtx := giouiApp.NewContext(&ops, e)
 				prevScreen := state.CurrentScreen
+
+				dragArea := clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops)
+				system.ActionInputOp(system.ActionMove).Add(gtx.Ops)
+				dragArea.Pop()
 
 				paint.Fill(gtx.Ops, customTheme.Background)
 
