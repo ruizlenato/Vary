@@ -1,1 +1,4 @@
 vary
+/vary
+!/vary/
+!/vary/**
