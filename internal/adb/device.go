@@ -247,6 +247,7 @@ func trackLoop(ctx context.Context, onEvent func()) error {
 	}
 
 	cmd := exec.CommandContext(ctx, adbPath, "track-devices")
+	configureCommand(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -308,6 +309,7 @@ func runAdbOutput(ctx context.Context, args ...string) (string, error) {
 	}
 
 	cmd := exec.CommandContext(ctx, adbPath, args...)
+	configureCommand(cmd)
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
