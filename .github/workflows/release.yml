@@ -1,0 +1,233 @@
+# .github/workflows/release.yml
+name: Release Vary
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows AMD64
+          - os: windows-latest
+            target: windows
+            arch: amd64
+            output: vary-windows-amd64.exe
+            binary_asset: vary-windows-amd64.exe
+
+          # Windows ARM64
+          - os: windows-latest
+            target: windows
+            arch: arm64
+            output: vary-windows-arm64.exe
+            binary_asset: vary-windows-arm64.exe
+
+          - os: ubuntu-latest
+            target: linux
+            arch: amd64
+            output: vary
+            binary_asset: vary-linux-amd64
+            appimage_asset: vary-linux-amd64.AppImage
+            build_appimage: true
+            linuxdeploy_arch: x86_64
+
+          # Linux ARM64
+          - os: ubuntu-24.04-arm
+            target: linux
+            arch: arm64
+            output: vary
+            binary_asset: vary-linux-arm64
+            appimage_asset: vary-linux-arm64.AppImage
+            build_appimage: true
+            linuxdeploy_arch: aarch64
+
+          # macOS AMD64
+          - os: macos-latest
+            target: macos
+            arch: amd64
+            output: Vary.app
+            package: vary-macos-amd64.zip
+
+          # macOS ARM64
+          - os: macos-latest
+            target: macos
+            arch: arm64
+            output: Vary.app
+            package: vary-macos-arm64.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install gogio
+        if: matrix.target != 'linux'
+        run: go install gioui.org/cmd/gogio@latest
+
+      - name: Install Linux build dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            imagemagick \
+            libwayland-dev wayland-protocols \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libx11-xcb-dev libxext-dev libxfixes-dev libxi-dev \
+            libxrandr-dev libxcursor-dev libxinerama-dev \
+            libegl1-mesa-dev libgles2-mesa-dev libgl1-mesa-dev \
+            libvulkan-dev \
+            ca-certificates
+
+      - name: Build with gogio (Windows)
+        if: matrix.target == 'windows'
+        env:
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+        shell: pwsh
+        run: |
+          gogio -target ${{ matrix.target }} -arch ${{ matrix.arch }} -o ${{ matrix.output }} ./cmd/vary
+
+      - name: Build with gogio (Linux/macOS)
+        if: matrix.target == 'macos'
+        env:
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+        shell: bash
+        run: |
+          gogio -target ${{ matrix.target }} -arch ${{ matrix.arch }} -o ${{ matrix.output }} ./cmd/vary
+
+      - name: Build Linux binary
+        if: matrix.target == 'linux'
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+        shell: bash
+        run: |
+          go build -o ${{ matrix.output }} ./cmd/vary
+
+      - name: Prepare Linux binary asset
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          cp ${{ matrix.output }} ${{ matrix.binary_asset }}
+          chmod +x ${{ matrix.binary_asset }}
+
+      - name: Build AppImage (Linux)
+        if: matrix.target == 'linux' && matrix.build_appimage
+        shell: bash
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
+
+          cp ${{ matrix.output }} AppDir/usr/bin/vary
+          chmod +x AppDir/usr/bin/vary
+          if command -v magick >/dev/null 2>&1; then
+            magick cmd/vary/appicon.png -resize 512x512\! AppDir/usr/share/icons/hicolor/512x512/apps/vary.png
+          else
+            convert cmd/vary/appicon.png -resize 512x512\! AppDir/usr/share/icons/hicolor/512x512/apps/vary.png
+          fi
+
+          cat > AppDir/usr/share/applications/vary.desktop << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Vary
+          Exec=vary
+          Icon=vary
+          Categories=Utility;
+          Terminal=false
+          EOF
+
+          LINUXDEPLOY_APPIMAGE="linuxdeploy-${{ matrix.linuxdeploy_arch }}.AppImage"
+          wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/${LINUXDEPLOY_APPIMAGE}"
+          chmod +x "${LINUXDEPLOY_APPIMAGE}"
+          APPIMAGE_EXTRACT_AND_RUN=1 ./${LINUXDEPLOY_APPIMAGE} --appdir AppDir --desktop-file AppDir/usr/share/applications/vary.desktop --icon-file AppDir/usr/share/icons/hicolor/512x512/apps/vary.png --output appimage
+
+          APPIMAGE_OUT=""
+          for f in ./*.AppImage; do
+            if [ "$f" = "./${LINUXDEPLOY_APPIMAGE}" ]; then
+              continue
+            fi
+            APPIMAGE_OUT="$f"
+            break
+          done
+
+          if [ -z "$APPIMAGE_OUT" ]; then
+            echo "No generated AppImage found"
+            exit 1
+          fi
+
+          mv "$APPIMAGE_OUT" ${{ matrix.appimage_asset }}
+
+      - name: Package (macOS)
+        if: matrix.target == 'macos'
+        run: |
+          zip -r ${{ matrix.package }} ${{ matrix.output }}
+          ls -lh ${{ matrix.package }}
+
+      - name: Upload macOS artifact
+        if: matrix.target == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}
+          path: ${{ matrix.package }}
+
+      - name: Upload Windows binary artifact
+        if: matrix.target == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary_asset }}
+          path: ${{ matrix.output }}
+
+      - name: Upload Linux binary artifact
+        if: matrix.target == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary_asset }}
+          path: ${{ matrix.binary_asset }}
+
+      - name: Upload Linux AppImage artifact
+        if: matrix.target == 'linux' && matrix.build_appimage
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.appimage_asset }}
+          path: ${{ matrix.appimage_asset }}
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -R artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          name: Release ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
