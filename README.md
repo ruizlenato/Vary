@@ -14,7 +14,7 @@ Optional:
 
 ## Build and Run
 
-Note: prebuilt binaries are not available yet; they will be published in GitHub Releases in the future.
+Prebuilt binaries are available in GitHub Releases.
 
 ### Run from source
 
