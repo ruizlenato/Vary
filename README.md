@@ -28,6 +28,19 @@ go run ./cmd/vary
 go build -o vary ./cmd/vary
 ./vary
 ```
+
+### Check or apply app updates
+
+The binary can check for newer GitHub Releases and update itself before the UI starts:
+
+```bash
+go run ./cmd/vary --version
+go run ./cmd/vary --check-updates
+go run ./cmd/vary --self-update
+```
+
+For release builds, the workflow embeds the Git tag into the binary so `--version` and `--self-update` compare against the published release correctly.
+
 ## AppData
 
 Vary stores runtime state in AppData under `vary`.

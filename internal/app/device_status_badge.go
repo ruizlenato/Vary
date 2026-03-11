@@ -3,6 +3,7 @@ package app
 import (
 	"image"
 	"image/color"
+	"strings"
 
 	"gioui.org/layout"
 	"gioui.org/op/clip"
@@ -47,6 +48,33 @@ func layoutDeviceStatusBadge(gtx layout.Context, state *AppState, mui *material.
 						return label.Layout(gtx)
 					}),
 				)
+			})
+		})
+	})
+}
+
+func layoutAppVersionBadge(gtx layout.Context, state *AppState, mui *material.Theme) layout.Dimensions {
+	if state.AppVersion == "" {
+		return layout.Dimensions{}
+	}
+
+	labelText := state.AppVersion
+	if state.AppVersion != "dev" && !strings.HasPrefix(state.AppVersion, "v") {
+		labelText = "v" + state.AppVersion
+	}
+	if state.AppUpdateAvailable {
+		labelText += " - update available"
+	}
+
+	return layout.Inset{
+		Bottom: unit.Dp(38),
+		Right:  unit.Dp(38),
+	}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.E.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.S.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				label := material.Body2(mui, labelText)
+				label.Color = color.NRGBA{R: 227, G: 227, B: 227, A: 255}
+				return label.Layout(gtx)
 			})
 		})
 	})

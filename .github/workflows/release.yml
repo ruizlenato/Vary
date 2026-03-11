@@ -100,7 +100,7 @@ jobs:
           CGO_ENABLED: 1
         shell: pwsh
         run: |
-          gogio -target ${{ matrix.target }} -arch ${{ matrix.arch }} -o ${{ matrix.output }} ./cmd/vary
+          gogio -target ${{ matrix.target }} -arch ${{ matrix.arch }} -ldflags "-X main.version=${{ github.ref_name }}" -o ${{ matrix.output }} ./cmd/vary
 
       - name: Build with gogio (Linux/macOS)
         if: matrix.target == 'macos'
@@ -109,7 +109,7 @@ jobs:
           CGO_ENABLED: 1
         shell: bash
         run: |
-          gogio -target ${{ matrix.target }} -arch ${{ matrix.arch }} -o ${{ matrix.output }} ./cmd/vary
+          gogio -target ${{ matrix.target }} -arch ${{ matrix.arch }} -ldflags "-X main.version=${{ github.ref_name }}" -o ${{ matrix.output }} ./cmd/vary
 
       - name: Build Linux binary
         if: matrix.target == 'linux'
@@ -119,7 +119,7 @@ jobs:
           CGO_ENABLED: 1
         shell: bash
         run: |
-          go build -o ${{ matrix.output }} ./cmd/vary
+          go build -ldflags "-X main.version=${{ github.ref_name }}" -o ${{ matrix.output }} ./cmd/vary
 
       - name: Prepare Linux binary asset
         if: matrix.target == 'linux'
@@ -231,3 +231,4 @@ jobs:
           name: Release ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

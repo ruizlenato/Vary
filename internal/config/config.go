@@ -17,12 +17,14 @@ const (
 
 type Config struct {
 	Mode               Mode   `json:"mode"`
+	AutoUpdate         bool   `json:"autoUpdate"`
 	CustomKeystorePath string `json:"customKeystorePath,omitempty"`
 }
 
 func Default() *Config {
 	return &Config{
-		Mode: ModeStable,
+		Mode:       ModeStable,
+		AutoUpdate: false,
 	}
 }
 

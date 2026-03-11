@@ -20,6 +20,7 @@ import (
 
 type SettingsScreen struct {
 	releaseMode           widget.Enum
+	autoUpdate            widget.Bool
 	saveBtn               widget.Clickable
 	keystoreBtn           widget.Clickable
 	clearKeyBtn           widget.Clickable
@@ -29,6 +30,7 @@ type SettingsScreen struct {
 	backIcon              *widget.Icon
 	closeIcon             *widget.Icon
 	lastMode              config.Mode
+	lastAutoUpdate        bool
 	lastKeystorePath      string
 	pendingKeystoreSource string
 	pendingClearKeystore  bool
@@ -58,6 +60,10 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 		if s.lastMode == config.ModeDev {
 			s.releaseMode.Value = radioKeyDev
 		}
+	}
+	if state.Config.AutoUpdate != s.lastAutoUpdate {
+		s.lastAutoUpdate = state.Config.AutoUpdate
+		s.autoUpdate.Value = state.Config.AutoUpdate
 	}
 	if state.Config.CustomKeystorePath != s.lastKeystorePath {
 		s.lastKeystorePath = state.Config.CustomKeystorePath
@@ -105,6 +111,19 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 								return layout.Inset{Top: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 									return s.radioOption(gtx, th, radioKeyDev, "Morphe Dev (Pre-release)")
 								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Inset{Top: unit.Dp(24), Bottom: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									check := material.CheckBox(s.mui, &s.autoUpdate, "Automatic updates")
+									check.Color = th.Text
+									check.IconColor = th.Primary
+									return check.Layout(gtx)
+								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								help := material.Body2(s.mui, "When enabled, Vary downloads and applies updates for Vary itself automatically when a new version is found.")
+								help.Color = th.TextMuted
+								return layout.Inset{Bottom: unit.Dp(8)}.Layout(gtx, help.Layout)
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								return layout.Inset{Top: unit.Dp(24), Bottom: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -270,6 +289,11 @@ func (s *SettingsScreen) HandleInput(gtx layout.Context, state *AppState) {
 			state.Config.Mode = newMode
 			changed = true
 		}
+		if state.Config.AutoUpdate != s.autoUpdate.Value {
+			state.Config.AutoUpdate = s.autoUpdate.Value
+			state.AppPromptForUpdate = state.Config.AutoUpdate && state.AppUpdateAvailable
+			changed = true
+		}
 
 		if s.pendingClearKeystore {
 			if err := removeImportedKeystoreFromAppData(state.Config.CustomKeystorePath); err != nil {
@@ -310,6 +334,7 @@ func (s *SettingsScreen) HandleInput(gtx layout.Context, state *AppState) {
 		} else {
 			state.SetStatus("Settings saved", false)
 			s.lastMode = state.Config.Mode
+			s.lastAutoUpdate = state.Config.AutoUpdate
 			s.lastKeystorePath = state.Config.CustomKeystorePath
 			s.pendingKeystoreSource = ""
 			s.pendingClearKeystore = false
