@@ -1,12 +1,12 @@
 //go:build windows
 
-package adb
+package executil
 
 import (
 	"os/exec"
 	"syscall"
 )
 
-func configureCommand(cmd *exec.Cmd) {
+func ConfigureCommand(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 }

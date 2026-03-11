@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"vary/internal/executil"
 	"vary/internal/storage"
 )
 
@@ -42,6 +43,7 @@ func (e *Executor) ListPackages(ctx context.Context) ([]string, error) {
 	}
 
 	cmd := exec.CommandContext(ctx, "java", "-jar", e.cliPath, "list-versions", e.patchesPath)
+	executil.ConfigureCommand(cmd)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -60,6 +62,7 @@ func (e *Executor) ListPatches(ctx context.Context, packageName string) ([]Patch
 	}
 
 	cmd := exec.CommandContext(ctx, "java", "-jar", e.cliPath, "list-patches", "--patches", e.patchesPath, "-f", packageName)
+	executil.ConfigureCommand(cmd)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -78,6 +81,7 @@ func (e *Executor) ListCompatibleVersions(ctx context.Context, packageName strin
 	}
 
 	cmd := exec.CommandContext(ctx, "java", "-jar", e.cliPath, "list-versions", e.patchesPath, "-f", packageName)
+	executil.ConfigureCommand(cmd)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -118,6 +122,7 @@ func (e *Executor) patchApp(ctx context.Context, inputFile string, includePatche
 		args = append(args, "-e", name)
 	}
 	cmd := exec.CommandContext(ctx, "java")
+	executil.ConfigureCommand(cmd)
 	appDir, err := storage.AppDataDir("vary")
 	if err == nil {
 		if mkErr := storage.EnsureDir(appDir); mkErr == nil {
@@ -409,6 +414,7 @@ func (e *Executor) checkJava() error {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "java", "-version")
+	executil.ConfigureCommand(cmd)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("Java not found. Install Java and try again")
 	}
