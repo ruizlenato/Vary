@@ -9,6 +9,9 @@ import (
 	"strings"
 
 	giouiApp "gioui.org/app"
+	"gioui.org/f32"
+	"gioui.org/io/event"
+	"gioui.org/io/pointer"
 	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
@@ -24,6 +27,13 @@ import (
 )
 
 var version = "dev"
+
+type windowDragRestoreState struct {
+	pressed   bool
+	restored  bool
+	pointerID pointer.ID
+	startPos  f32.Point
+}
 
 func main() {
 	if handled, err := handleCLIFlags(); err != nil {
@@ -61,7 +71,6 @@ func main() {
 		w.Option(
 			giouiApp.Title("Vary"),
 			giouiApp.Decorated(false),
-			giouiApp.MaxSize(unit.Dp(1280), unit.Dp(1024)),
 			giouiApp.MinSize(unit.Dp(800), unit.Dp(800)),
 		)
 
@@ -96,6 +105,9 @@ func main() {
 		})
 
 		var ops op.Ops
+		var dragRestore windowDragRestoreState
+		var dragRestoreTag struct{}
+		windowMode := giouiApp.Windowed
 		for {
 			ev := w.Event()
 			selectFileScreen.ListenEvent(ev)
@@ -103,13 +115,19 @@ func main() {
 			switch e := ev.(type) {
 			case giouiApp.DestroyEvent:
 				os.Exit(0)
+			case giouiApp.ConfigEvent:
+				windowMode = e.Config.Mode
 			case giouiApp.FrameEvent:
 				gtx := giouiApp.NewContext(&ops, e)
 				prevScreen := state.CurrentScreen
 
 				dragArea := clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops)
+				pass := pointer.PassOp{}.Push(gtx.Ops)
+				event.Op(gtx.Ops, &dragRestoreTag)
 				system.ActionInputOp(system.ActionMove).Add(gtx.Ops)
+				pass.Pop()
 				dragArea.Pop()
+				handleWindowDragRestore(gtx, &w, &dragRestoreTag, windowMode, &dragRestore)
 
 				paint.Fill(gtx.Ops, customTheme.Background)
 
@@ -187,6 +205,47 @@ func main() {
 	}()
 
 	giouiApp.Main()
+}
+
+func handleWindowDragRestore(gtx layout.Context, w *giouiApp.Window, tag event.Tag, mode giouiApp.WindowMode, state *windowDragRestoreState) {
+	const restoreThreshold = 12
+
+	for {
+		ev, ok := gtx.Source.Event(pointer.Filter{
+			Target: tag,
+			Kinds:  pointer.Press | pointer.Drag | pointer.Release | pointer.Cancel,
+		})
+		if !ok {
+			return
+		}
+
+		e, ok := ev.(pointer.Event)
+		if !ok {
+			continue
+		}
+
+		switch e.Kind {
+		case pointer.Press:
+			state.pressed = true
+			state.restored = false
+			state.pointerID = e.PointerID
+			state.startPos = e.Position
+		case pointer.Drag:
+			if mode != giouiApp.Maximized || !state.pressed || state.restored || e.PointerID != state.pointerID {
+				continue
+			}
+			if e.Position.Y-state.startPos.Y < float32(gtx.Dp(unit.Dp(restoreThreshold))) {
+				continue
+			}
+			state.restored = true
+			w.Perform(system.ActionUnmaximize | system.ActionMove)
+		case pointer.Release, pointer.Cancel:
+			if e.PointerID == state.pointerID {
+				state.pressed = false
+				state.restored = false
+			}
+		}
+	}
 }
 
 func handleCLIFlags() (bool, error) {
