@@ -62,7 +62,7 @@ func main() {
 			giouiApp.Title("Vary"),
 			giouiApp.Decorated(false),
 			giouiApp.MaxSize(unit.Dp(1280), unit.Dp(1024)),
-			giouiApp.MinSize(unit.Dp(800), unit.Dp(600)),
+			giouiApp.MinSize(unit.Dp(800), unit.Dp(800)),
 		)
 
 		w.Option(giouiApp.Size(unit.Dp(1100), unit.Dp(700)))
