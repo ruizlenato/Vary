@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -116,7 +117,16 @@ func (c *Client) GetCLIRelease(devMode bool) (*ReleaseInfo, error) {
 }
 
 func (c *Client) GetPatchesRelease(devMode bool) (*ReleaseInfo, error) {
-	release, err := c.GetLatestRelease(PatchesRepo, devMode)
+	return c.GetPatchesReleaseFromRepo(PatchesRepo, devMode)
+}
+
+func (c *Client) GetPatchesReleaseFromRepo(repoInput string, devMode bool) (*ReleaseInfo, error) {
+	repo, err := NormalizeRepo(repoInput)
+	if err != nil {
+		return nil, err
+	}
+
+	release, err := c.GetLatestRelease(repo, devMode)
 	if err != nil {
 		return nil, err
 	}
@@ -133,5 +143,34 @@ func (c *Client) GetPatchesRelease(devMode bool) (*ReleaseInfo, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no .mpp asset found in release %s", release.TagName)
+	return nil, fmt.Errorf("no .mpp asset found in release %s (%s)", release.TagName, repo)
+}
+
+func NormalizeRepo(repoInput string) (string, error) {
+	repo := strings.TrimSpace(repoInput)
+	if repo == "" {
+		return "", fmt.Errorf("empty GitHub repository")
+	}
+
+	repo = strings.TrimSuffix(repo, "/")
+
+	if strings.HasPrefix(strings.ToLower(repo), "http://") || strings.HasPrefix(strings.ToLower(repo), "https://") {
+		u, err := url.Parse(repo)
+		if err != nil {
+			return "", fmt.Errorf("invalid GitHub URL: %w", err)
+		}
+		host := strings.ToLower(u.Hostname())
+		if host != "github.com" && host != "www.github.com" {
+			return "", fmt.Errorf("only github.com repositories are supported")
+		}
+		repo = strings.Trim(u.Path, "/")
+	}
+
+	repo = strings.TrimSuffix(repo, ".git")
+	parts := strings.Split(repo, "/")
+	if len(parts) < 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return "", fmt.Errorf("repository must be in the format owner/repo")
+	}
+
+	return parts[0] + "/" + parts[1], nil
 }

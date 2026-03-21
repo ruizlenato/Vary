@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"vary/internal/config"
+	"vary/internal/github"
 	"vary/internal/storage"
 
 	"gioui.org/layout"
@@ -34,39 +35,65 @@ type SettingsScreen struct {
 	closeIcon             *widget.Icon
 	lastMode              config.Mode
 	lastAutoUpdate        bool
+	lastCustomPatchesRepo string
 	lastKeystorePath      string
 	pendingKeystoreSource string
 	pendingClearKeystore  bool
+	customPatchesRepo     widget.Editor
+	repoErrorOkBtn        widget.Clickable
+	repoValidationError   string
+	showRepoErrorModal    bool
+	lastCustomRepoInput   string
 	explorer              *explorer.Explorer
 	pickResults           chan filePickResult
 }
 
 func NewSettingsScreen(ex *explorer.Explorer) *SettingsScreen {
-	return &SettingsScreen{
+	screen := &SettingsScreen{
 		backIcon:    mustIcon(backArrowIconVG),
 		closeIcon:   mustIcon(closeIconVG),
 		mui:         material.NewTheme(),
 		explorer:    ex,
 		pickResults: make(chan filePickResult, 1),
 	}
+	screen.customPatchesRepo.SingleLine = true
+	return screen
 }
 
 const (
 	radioKeyStable = string(config.ModeStable)
 	radioKeyDev    = string(config.ModeDev)
+	radioKeyCustom = "custom"
 )
 
 func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) layout.Dimensions {
 	if state.Config.Mode != s.lastMode {
 		s.lastMode = state.Config.Mode
 		s.releaseMode.Value = radioKeyStable
-		if s.lastMode == config.ModeDev {
+		if strings.TrimSpace(state.Config.CustomPatchesRepo) != "" {
+			s.releaseMode.Value = radioKeyCustom
+		} else if s.lastMode == config.ModeDev {
 			s.releaseMode.Value = radioKeyDev
 		}
 	}
 	if state.Config.AutoUpdate != s.lastAutoUpdate {
 		s.lastAutoUpdate = state.Config.AutoUpdate
 		s.autoUpdate.Value = state.Config.AutoUpdate
+	}
+	if state.Config.CustomPatchesRepo != s.lastCustomPatchesRepo {
+		s.lastCustomPatchesRepo = state.Config.CustomPatchesRepo
+		if strings.TrimSpace(s.customPatchesRepo.Text()) != state.Config.CustomPatchesRepo {
+			s.customPatchesRepo.SetText(state.Config.CustomPatchesRepo)
+		}
+	}
+	if currentInput := s.customPatchesRepo.Text(); currentInput != s.lastCustomRepoInput {
+		s.lastCustomRepoInput = currentInput
+		s.repoValidationError = ""
+		s.showRepoErrorModal = false
+	}
+	if s.releaseMode.Value != radioKeyCustom && s.repoValidationError != "" {
+		s.repoValidationError = ""
+		s.showRepoErrorModal = false
 	}
 	if state.Config.CustomKeystorePath != s.lastKeystorePath {
 		s.lastKeystorePath = state.Config.CustomKeystorePath
@@ -101,7 +128,8 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							return layout.Inset{Top: unit.Dp(20)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return s.layoutSettingsCard(gtx, th, contentWidth, "Updates", "Choose how Vary checks and applies updates for Vary itself.", func(gtx layout.Context) layout.Dimensions {
+								return s.layoutSettingsCard(gtx, th, contentWidth, "Patches", "Choose Morphe channel and optionally override patches from another GitHub repo.", func(gtx layout.Context) layout.Dimensions {
+									hasRepoValidationError := s.repoValidationError != ""
 									return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 											label := material.Body1(s.mui, "Release channel")
@@ -117,7 +145,53 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 											})
 										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(20), Bottom: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.radioOption(gtx, th, contentWidth, radioKeyCustom, "Custom Repo")
+											})
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											if s.releaseMode.Value != radioKeyCustom {
+												return layout.Dimensions{}
+											}
+											help := material.Body2(s.mui, "Use owner/repo or a GitHub URL. Example: RookieEnough/De-ReVanced")
+											help.Color = th.TextMuted
+											return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10)}.Layout(gtx, help.Layout)
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											if s.releaseMode.Value != radioKeyCustom {
+												return layout.Dimensions{}
+											}
+											inputHeight := gtx.Dp(unit.Dp(46))
+											inputGtx := gtx
+											inputGtx.Constraints.Min.Y = inputHeight
+											inputGtx.Constraints.Max.Y = inputHeight
+											return layoutOutlinedSurface(inputGtx, unit.Dp(6), color.NRGBA{R: 64, G: 64, B: 64, A: 255}, color.NRGBA{R: 10, G: 10, B: 10, A: 255}, func(gtx layout.Context) layout.Dimensions {
+												return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+													editor := material.Editor(s.mui, &s.customPatchesRepo, "owner/repo or GitHub URL")
+													editor.Color = th.Text
+													editor.HintColor = th.TextMuted
+													return editor.Layout(gtx)
+												})
+											})
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											if !hasRepoValidationError || s.releaseMode.Value != radioKeyCustom {
+												return layout.Dimensions{}
+											}
+											info := material.Body2(s.mui, "Invalid Repo")
+											info.Color = color.NRGBA{R: 230, G: 120, B: 120, A: 255}
+											return layout.Inset{Top: unit.Dp(10)}.Layout(gtx, info.Layout)
+										}),
+									)
+								})
+							})
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return layout.Inset{Top: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutSettingsCard(gtx, th, contentWidth, "App updates", "Control updates for Vary itself.", func(gtx layout.Context) layout.Dimensions {
+									return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Bottom: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												check := material.CheckBox(s.mui, &s.autoUpdate, "Automatic updates")
 												check.Color = th.Text
 												check.IconColor = th.Primary
@@ -125,7 +199,7 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 											})
 										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											help := material.Body2(s.mui, "When enabled, Vary downloads and applies updates for Vary itself automatically when a new version is found.")
+											help := material.Body2(s.mui, "When enabled, Vary downloads and applies updates for Vary automatically when a new version is found.")
 											help.Color = th.TextMuted
 											return help.Layout(gtx)
 										}),
@@ -219,6 +293,13 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 					})
 				})
 			})
+		}),
+		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+			if !s.showRepoErrorModal {
+				return layout.Dimensions{}
+			}
+			gtx.Constraints = layout.Exact(originalConstraints.Max)
+			return s.layoutRepoErrorModal(gtx, th)
 		}),
 	)
 
@@ -357,6 +438,42 @@ func (s *SettingsScreen) actionButton(gtx layout.Context, th *Theme, text string
 	})
 }
 
+func (s *SettingsScreen) layoutRepoErrorModal(gtx layout.Context, th *Theme) layout.Dimensions {
+	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		width := min(gtx.Constraints.Max.X-gtx.Dp(unit.Dp(60)), gtx.Dp(unit.Dp(460)))
+		height := gtx.Dp(unit.Dp(210))
+		if width < gtx.Dp(unit.Dp(280)) {
+			width = gtx.Constraints.Max.X - gtx.Dp(unit.Dp(24))
+		}
+		gtx.Constraints = layout.Exact(image.Pt(width, height))
+		return layoutOutlinedSurface(gtx, unit.Dp(8), color.NRGBA{R: 95, G: 95, B: 95, A: 255}, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Top: unit.Dp(16), Bottom: unit.Dp(16), Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						title := material.Body1(s.mui, "Invalid patches repository")
+						title.Color = th.Text
+						return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, title.Layout)
+					}),
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						msg := s.repoValidationError
+						if msg == "" {
+							msg = "Could not find releases for the provided repository."
+						}
+						body := material.Body2(s.mui, msg)
+						body.Color = th.TextMuted
+						return body.Layout(gtx)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.actionButton(gtx, th, "OK", &s.repoErrorOkBtn, gtx.Dp(unit.Dp(140)))
+						})
+					}),
+				)
+			})
+		})
+	})
+}
+
 func (s *SettingsScreen) HandleInput(gtx layout.Context, state *AppState) {
 	select {
 	case result := <-s.pickResults:
@@ -386,20 +503,61 @@ func (s *SettingsScreen) HandleInput(gtx layout.Context, state *AppState) {
 		s.pendingClearKeystore = false
 		state.SetScreen(ScreenHome)
 	}
+	for s.repoErrorOkBtn.Clicked(gtx) {
+		s.showRepoErrorModal = false
+	}
 	for s.saveBtn.Clicked(gtx) {
 		newMode := config.ModeStable
 		if s.releaseMode.Value == radioKeyDev {
 			newMode = config.ModeDev
 		}
+		newAutoUpdate := s.autoUpdate.Value
+
+		newCustomPatchesRepo := ""
+		if s.releaseMode.Value == radioKeyCustom {
+			newCustomPatchesRepo = strings.TrimSpace(s.customPatchesRepo.Text())
+			if newCustomPatchesRepo == "" {
+				s.repoValidationError = "You need to enter a GitHub repository (owner/repo) or a GitHub URL."
+				s.showRepoErrorModal = true
+				state.SetStatus("Invalid patches repo", true)
+				return
+			}
+
+			normalizedRepo, err := github.NormalizeRepo(newCustomPatchesRepo)
+			if err != nil {
+				s.repoValidationError = err.Error()
+				s.showRepoErrorModal = true
+				state.SetStatus("Invalid patches repo", true)
+				return
+			}
+
+			client := github.NewClient()
+			if _, err := client.GetLatestRelease(normalizedRepo, false); err != nil {
+				s.repoValidationError = err.Error()
+				s.showRepoErrorModal = true
+				state.SetStatus("Invalid patches repo", true)
+				return
+			}
+
+			newCustomPatchesRepo = normalizedRepo
+		}
+
+		s.repoValidationError = ""
+		s.showRepoErrorModal = false
 
 		changed := false
 		if state.Config.Mode != newMode {
 			state.Config.Mode = newMode
 			changed = true
 		}
-		if state.Config.AutoUpdate != s.autoUpdate.Value {
-			state.Config.AutoUpdate = s.autoUpdate.Value
+		if state.Config.AutoUpdate != newAutoUpdate {
+			state.Config.AutoUpdate = newAutoUpdate
 			state.AppPromptForUpdate = state.Config.AutoUpdate && state.AppUpdateAvailable
+			changed = true
+		}
+
+		if state.Config.CustomPatchesRepo != newCustomPatchesRepo {
+			state.Config.CustomPatchesRepo = newCustomPatchesRepo
 			changed = true
 		}
 
@@ -443,9 +601,11 @@ func (s *SettingsScreen) HandleInput(gtx layout.Context, state *AppState) {
 			state.SetStatus("Settings saved", false)
 			s.lastMode = state.Config.Mode
 			s.lastAutoUpdate = state.Config.AutoUpdate
+			s.lastCustomPatchesRepo = state.Config.CustomPatchesRepo
 			s.lastKeystorePath = state.Config.CustomKeystorePath
 			s.pendingKeystoreSource = ""
 			s.pendingClearKeystore = false
+			s.customPatchesRepo.SetText(state.Config.CustomPatchesRepo)
 		}
 		state.SetScreen(ScreenHome)
 	}

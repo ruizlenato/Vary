@@ -19,6 +19,7 @@ type Config struct {
 	Mode               Mode   `json:"mode"`
 	AutoUpdate         bool   `json:"autoUpdate"`
 	CustomKeystorePath string `json:"customKeystorePath,omitempty"`
+	CustomPatchesRepo  string `json:"customPatchesRepo,omitempty"`
 }
 
 func Default() *Config {

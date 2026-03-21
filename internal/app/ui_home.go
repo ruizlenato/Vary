@@ -63,8 +63,24 @@ func (h *HomeScreen) Layout(gtx layout.Context, th *Theme, state *AppState) layo
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						title := material.H2(h.mui, "Vary")
 						title.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+
+						customRepo := strings.TrimSpace(state.Config.CustomPatchesRepo)
+						subtitleText := "Release channel: Morphe (Stable)"
+						if customRepo != "" {
+							subtitleText = "Custom Channel: " + customRepo
+						} else if state.Config.IsDev() {
+							subtitleText = "Release channel: Morphe Dev (Pre-release)"
+						}
+						subtitle := material.Body1(h.mui, subtitleText)
+						subtitle.Color = color.NRGBA{R: 200, G: 200, B: 200, A: 255}
+
 						return layout.Inset{Bottom: unit.Dp(32)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return title.Layout(gtx)
+							return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
+								layout.Rigid(title.Layout),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: unit.Dp(6)}.Layout(gtx, subtitle.Layout)
+								}),
+							)
 						})
 					}),
 

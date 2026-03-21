@@ -102,6 +102,20 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 
 		client := github.NewClient()
 		devMode := state.Config.IsDev()
+		customPatchesRepo := strings.TrimSpace(state.Config.CustomPatchesRepo)
+		cliDevMode := devMode
+		if customPatchesRepo != "" {
+			cliDevMode = false
+		}
+		patchesFallbackName := "morphe-patches"
+		if customPatchesRepo != "" {
+			if normalizedRepo, normErr := github.NormalizeRepo(customPatchesRepo); normErr == nil {
+				parts := strings.Split(normalizedRepo, "/")
+				if len(parts) == 2 && strings.TrimSpace(parts[1]) != "" {
+					patchesFallbackName = parts[1]
+				}
+			}
+		}
 		cliStatePath := filepath.Join(appDir, "cli_state.json")
 		patchesStatePath := filepath.Join(appDir, "patches_state.json")
 		cliState, _ := downloader.LoadState(cliStatePath)
@@ -110,8 +124,12 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 		var cliPath string
 		var patchesPath string
 
-		advanceStage("Fetching morphe-cli...", 0.22)
-		cliRelease, err := client.GetCLIRelease(devMode)
+		cliStatus := "Fetching morphe-cli..."
+		if customPatchesRepo != "" {
+			cliStatus = "Fetching morphe-cli (stable)..."
+		}
+		advanceStage(cliStatus, 0.22)
+		cliRelease, err := client.GetCLIRelease(cliDevMode)
 		if err != nil {
 			if isRateLimitError(err) {
 				fallbackPath, ok := resolveCachedAsset(appDir, cliState, "morphe-cli")
@@ -127,11 +145,21 @@ func (d *DownloadScreen) StartDownload(state *AppState) {
 			}
 		}
 
-		advanceStage("Fetching morphe-patches...", 0.30)
-		patchesRelease, err := client.GetPatchesRelease(devMode)
+		fetchingStatus := "Fetching morphe-patches..."
+		if customPatchesRepo != "" {
+			fetchingStatus = "Fetching custom patches..."
+		}
+		advanceStage(fetchingStatus, 0.30)
+
+		var patchesRelease *github.ReleaseInfo
+		if customPatchesRepo != "" {
+			patchesRelease, err = client.GetPatchesReleaseFromRepo(customPatchesRepo, devMode)
+		} else {
+			patchesRelease, err = client.GetPatchesRelease(devMode)
+		}
 		if err != nil {
 			if isRateLimitError(err) {
-				fallbackPath, ok := resolveCachedAsset(appDir, patchesState, "morphe-patches")
+				fallbackPath, ok := resolveCachedAsset(appDir, patchesState, patchesFallbackName)
 				if !ok {
 					fail("GitHub Patches error: ", err)
 					return
