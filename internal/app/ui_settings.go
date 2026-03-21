@@ -44,6 +44,7 @@ type SettingsScreen struct {
 	repoValidationError   string
 	showRepoErrorModal    bool
 	lastCustomRepoInput   string
+	layoutScale           float32
 	explorer              *explorer.Explorer
 	pickResults           chan filePickResult
 }
@@ -65,6 +66,48 @@ const (
 	radioKeyDev    = string(config.ModeDev)
 	radioKeyCustom = "custom"
 )
+
+func (s *SettingsScreen) computeLayoutScale(gtx layout.Context) float32 {
+	baseW := float32(gtx.Dp(unit.Dp(920)))
+	baseH := float32(gtx.Dp(unit.Dp(980)))
+	if baseW <= 0 || baseH <= 0 {
+		return 1
+	}
+
+	scaleW := float32(gtx.Constraints.Max.X) / baseW
+	scaleH := float32(gtx.Constraints.Max.Y) / baseH
+
+	scale := scaleW
+	if scaleH < scale {
+		scale = scaleH
+	}
+	if scale > 1 {
+		scale = 1
+	}
+	if scale < 0.68 {
+		scale = 0.68
+	}
+
+	return scale
+}
+
+func (s *SettingsScreen) dp(v float32) unit.Dp {
+	if s.layoutScale <= 0 {
+		return unit.Dp(v)
+	}
+	return unit.Dp(v * s.layoutScale)
+}
+
+func (s *SettingsScreen) sp(v float32) unit.Sp {
+	scaled := v
+	if s.layoutScale > 0 {
+		scaled = v * s.layoutScale
+	}
+	if scaled < 11 {
+		scaled = 11
+	}
+	return unit.Sp(scaled)
+}
 
 func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) layout.Dimensions {
 	if state.Config.Mode != s.lastMode {
@@ -102,21 +145,23 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 	}
 
 	originalConstraints := gtx.Constraints
+	s.layoutScale = s.computeLayoutScale(gtx)
+	s.mui.TextSize = s.sp(16)
 
 	layout.Stack{}.Layout(gtx,
 
 		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
 			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				contentWidth := min(gtx.Constraints.Max.X-gtx.Dp(unit.Dp(48)), gtx.Dp(unit.Dp(760)))
-				if contentWidth < gtx.Dp(unit.Dp(280)) {
-					contentWidth = gtx.Constraints.Max.X - gtx.Dp(unit.Dp(24))
+				contentWidth := min(gtx.Constraints.Max.X-gtx.Dp(s.dp(48)), gtx.Dp(s.dp(760)))
+				if contentWidth < gtx.Dp(s.dp(280)) {
+					contentWidth = gtx.Constraints.Max.X - gtx.Dp(s.dp(24))
 				}
-				narrow := contentWidth < gtx.Dp(unit.Dp(540))
+				narrow := contentWidth < gtx.Dp(s.dp(540))
 				return layout.Inset{
-					Top:    unit.Dp(28),
-					Bottom: unit.Dp(28),
-					Left:   unit.Dp(12),
-					Right:  unit.Dp(12),
+					Top:    s.dp(28),
+					Bottom: s.dp(28),
+					Left:   s.dp(12),
+					Right:  s.dp(12),
 				}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					gtx.Constraints.Max.X = contentWidth
 					return layout.Flex{
@@ -127,25 +172,25 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 							return s.layoutHeader(gtx, th)
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return layout.Inset{Top: unit.Dp(20)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Inset{Top: s.dp(20)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 								return s.layoutSettingsCard(gtx, th, contentWidth, "Patches", "Choose Morphe channel and optionally override patches from another GitHub repo.", func(gtx layout.Context) layout.Dimensions {
 									hasRepoValidationError := s.repoValidationError != ""
 									return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 											label := material.Body1(s.mui, "Release channel")
 											label.Color = th.Text
-											return layout.Inset{Bottom: unit.Dp(12)}.Layout(gtx, label.Layout)
+											return layout.Inset{Bottom: s.dp(12)}.Layout(gtx, label.Layout)
 										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 											return s.radioOption(gtx, th, contentWidth, radioKeyStable, "Morphe (Stable)")
 										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: s.dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return s.radioOption(gtx, th, contentWidth, radioKeyDev, "Morphe Dev (Pre-release)")
 											})
 										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: s.dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												return s.radioOption(gtx, th, contentWidth, radioKeyCustom, "Custom Repo")
 											})
 										}),
@@ -155,18 +200,18 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 											}
 											help := material.Body2(s.mui, "Use owner/repo or a GitHub URL. Example: RookieEnough/De-ReVanced")
 											help.Color = th.TextMuted
-											return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10)}.Layout(gtx, help.Layout)
+											return layout.Inset{Top: s.dp(10), Bottom: s.dp(10)}.Layout(gtx, help.Layout)
 										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 											if s.releaseMode.Value != radioKeyCustom {
 												return layout.Dimensions{}
 											}
-											inputHeight := gtx.Dp(unit.Dp(46))
+											inputHeight := gtx.Dp(s.dp(46))
 											inputGtx := gtx
 											inputGtx.Constraints.Min.Y = inputHeight
 											inputGtx.Constraints.Max.Y = inputHeight
-											return layoutOutlinedSurface(inputGtx, unit.Dp(6), color.NRGBA{R: 64, G: 64, B: 64, A: 255}, color.NRGBA{R: 10, G: 10, B: 10, A: 255}, func(gtx layout.Context) layout.Dimensions {
-												return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layoutOutlinedSurface(inputGtx, s.dp(6), color.NRGBA{R: 64, G: 64, B: 64, A: 255}, color.NRGBA{R: 10, G: 10, B: 10, A: 255}, func(gtx layout.Context) layout.Dimensions {
+												return layout.Inset{Top: s.dp(10), Bottom: s.dp(10), Left: s.dp(12), Right: s.dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 													editor := material.Editor(s.mui, &s.customPatchesRepo, "owner/repo or GitHub URL")
 													editor.Color = th.Text
 													editor.HintColor = th.TextMuted
@@ -180,18 +225,18 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 											}
 											info := material.Body2(s.mui, "Invalid Repo")
 											info.Color = color.NRGBA{R: 230, G: 120, B: 120, A: 255}
-											return layout.Inset{Top: unit.Dp(10)}.Layout(gtx, info.Layout)
+											return layout.Inset{Top: s.dp(10)}.Layout(gtx, info.Layout)
 										}),
 									)
 								})
 							})
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return layout.Inset{Top: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Inset{Top: s.dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 								return s.layoutSettingsCard(gtx, th, contentWidth, "App updates", "Control updates for Vary itself.", func(gtx layout.Context) layout.Dimensions {
 									return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Bottom: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Bottom: s.dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 												check := material.CheckBox(s.mui, &s.autoUpdate, "Automatic updates")
 												check.Color = th.Text
 												check.IconColor = th.Primary
@@ -208,7 +253,7 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 							})
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return layout.Inset{Top: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Inset{Top: s.dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 								return s.layoutSettingsCard(gtx, th, contentWidth, "Signing", "Manage the keystore used when Morphe signs patched apps.", func(gtx layout.Context) layout.Dimensions {
 									keystoreText := "No custom keystore selected"
 									if s.pendingClearKeystore {
@@ -243,11 +288,11 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 							})
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return layout.Inset{Top: unit.Dp(20), Bottom: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Inset{Top: s.dp(20), Bottom: s.dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 								return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									width := min(gtx.Dp(unit.Dp(220)), contentWidth)
+									width := min(gtx.Dp(s.dp(220)), contentWidth)
 									if narrow {
-										width = min(gtx.Dp(unit.Dp(220)), contentWidth-gtx.Dp(unit.Dp(24)))
+										width = min(gtx.Dp(s.dp(220)), contentWidth-gtx.Dp(s.dp(24)))
 									}
 									return s.actionButton(gtx, th, "Save settings", &s.saveBtn, width)
 								})
@@ -260,8 +305,8 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints = layout.Exact(originalConstraints.Max)
 			return layout.Inset{
-				Top:  unit.Dp(38),
-				Left: unit.Dp(38),
+				Top:  s.dp(38),
+				Left: s.dp(38),
 			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.W.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.N.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -279,8 +324,8 @@ func (s *SettingsScreen) Layout(gtx layout.Context, th *Theme, state *AppState) 
 		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints = layout.Exact(originalConstraints.Max)
 			return layout.Inset{
-				Top:   unit.Dp(38),
-				Right: unit.Dp(38),
+				Top:   s.dp(38),
+				Right: s.dp(38),
 			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.E.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.N.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -316,22 +361,22 @@ func (s *SettingsScreen) layoutHeader(gtx layout.Context, th *Theme) layout.Dime
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			subtitle := material.Body2(s.mui, "Tune update behavior and signing options before you patch.")
 			subtitle.Color = th.TextMuted
-			return layout.Inset{Top: unit.Dp(6)}.Layout(gtx, subtitle.Layout)
+			return layout.Inset{Top: s.dp(6)}.Layout(gtx, subtitle.Layout)
 		}),
 	)
 }
 
 func (s *SettingsScreen) layoutSettingsCard(gtx layout.Context, th *Theme, maxWidth int, titleText, subtitleText string, content layout.Widget) layout.Dimensions {
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		width := min(maxWidth, gtx.Dp(unit.Dp(560)))
+		width := min(maxWidth, gtx.Dp(s.dp(560)))
 		if width > gtx.Constraints.Max.X {
 			width = gtx.Constraints.Max.X
 		}
 		cardGtx := gtx
 		cardGtx.Constraints.Min.X = width
 		cardGtx.Constraints.Max.X = width
-		return layoutMeasuredOutlinedSurface(cardGtx, unit.Dp(8), color.NRGBA{R: 78, G: 78, B: 78, A: 255}, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: unit.Dp(18), Bottom: unit.Dp(18), Left: unit.Dp(18), Right: unit.Dp(18)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layoutMeasuredOutlinedSurface(cardGtx, s.dp(8), color.NRGBA{R: 78, G: 78, B: 78, A: 255}, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Top: s.dp(18), Bottom: s.dp(18), Left: s.dp(18), Right: s.dp(18)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						title := material.Body1(s.mui, titleText)
@@ -341,7 +386,7 @@ func (s *SettingsScreen) layoutSettingsCard(gtx layout.Context, th *Theme, maxWi
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						subtitle := material.Body2(s.mui, subtitleText)
 						subtitle.Color = th.TextMuted
-						return layout.Inset{Top: unit.Dp(6), Bottom: unit.Dp(18)}.Layout(gtx, subtitle.Layout)
+						return layout.Inset{Top: s.dp(6), Bottom: s.dp(18)}.Layout(gtx, subtitle.Layout)
 					}),
 					layout.Rigid(content),
 				)
@@ -351,19 +396,19 @@ func (s *SettingsScreen) layoutSettingsCard(gtx layout.Context, th *Theme, maxWi
 }
 
 func (s *SettingsScreen) layoutDualButtons(gtx layout.Context, th *Theme, stacked bool) layout.Dimensions {
-	buttonWidth := min(gtx.Dp(unit.Dp(210)), (gtx.Constraints.Max.X-gtx.Dp(unit.Dp(10)))/2)
-	if stacked || buttonWidth < gtx.Dp(unit.Dp(120)) {
+	buttonWidth := min(gtx.Dp(s.dp(210)), (gtx.Constraints.Max.X-gtx.Dp(s.dp(10)))/2)
+	if stacked || buttonWidth < gtx.Dp(s.dp(120)) {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					width := min(gtx.Dp(unit.Dp(220)), gtx.Constraints.Max.X-gtx.Dp(unit.Dp(12)))
+					width := min(gtx.Dp(s.dp(220)), gtx.Constraints.Max.X-gtx.Dp(s.dp(12)))
 					return s.actionButton(gtx, th, "Select keystore", &s.keystoreBtn, width)
 				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{Top: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: s.dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						width := min(gtx.Dp(unit.Dp(220)), gtx.Constraints.Max.X-gtx.Dp(unit.Dp(12)))
+						width := min(gtx.Dp(s.dp(220)), gtx.Constraints.Max.X-gtx.Dp(s.dp(12)))
 						return s.actionButton(gtx, th, "Clear", &s.clearKeyBtn, width)
 					})
 				})
@@ -377,7 +422,7 @@ func (s *SettingsScreen) layoutDualButtons(gtx layout.Context, th *Theme, stacke
 				return s.actionButton(gtx, th, "Select keystore", &s.keystoreBtn, buttonWidth)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return layout.Spacer{Width: unit.Dp(10)}.Layout(gtx)
+				return layout.Spacer{Width: s.dp(10)}.Layout(gtx)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return s.actionButton(gtx, th, "Clear", &s.clearKeyBtn, buttonWidth)
@@ -388,17 +433,17 @@ func (s *SettingsScreen) layoutDualButtons(gtx layout.Context, th *Theme, stacke
 
 func (s *SettingsScreen) radioOption(gtx layout.Context, th *Theme, maxWidth int, key, label string) layout.Dimensions {
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		width := min(gtx.Dp(unit.Dp(320)), maxWidth-gtx.Dp(unit.Dp(24)))
+		width := min(gtx.Dp(s.dp(320)), maxWidth-gtx.Dp(s.dp(24)))
 		if width > gtx.Constraints.Max.X {
 			width = gtx.Constraints.Max.X
 		}
-		if width < gtx.Dp(unit.Dp(180)) {
+		if width < gtx.Dp(s.dp(180)) {
 			width = gtx.Constraints.Max.X
 		}
 		optionGtx := gtx
-		optionGtx.Constraints = layout.Exact(image.Pt(width, gtx.Dp(unit.Dp(52))))
-		return layoutOutlinedSurface(optionGtx, unit.Dp(6), color.NRGBA{R: 64, G: 64, B: 64, A: 255}, color.NRGBA{R: 10, G: 10, B: 10, A: 255}, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		optionGtx.Constraints = layout.Exact(image.Pt(width, gtx.Dp(s.dp(52))))
+		return layoutOutlinedSurface(optionGtx, s.dp(6), color.NRGBA{R: 64, G: 64, B: 64, A: 255}, color.NRGBA{R: 10, G: 10, B: 10, A: 255}, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Left: s.dp(12), Right: s.dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				radioBtn := material.RadioButton(s.mui, &s.releaseMode, key, label)
 				radioBtn.Color = th.Text
 				radioBtn.IconColor = th.Primary
@@ -409,15 +454,15 @@ func (s *SettingsScreen) radioOption(gtx layout.Context, th *Theme, maxWidth int
 }
 
 func (s *SettingsScreen) actionButton(gtx layout.Context, th *Theme, text string, btn *widget.Clickable, width int) layout.Dimensions {
-	height := gtx.Dp(unit.Dp(44))
+	height := gtx.Dp(s.dp(44))
 	if width <= 0 {
-		width = gtx.Dp(unit.Dp(180))
+		width = gtx.Dp(s.dp(180))
 	}
 	return layout.Inset{}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints = layout.Exact(image.Pt(width, height))
 		return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			borderInset := gtx.Dp(unit.Dp(1))
-			cornerRadius := gtx.Dp(unit.Dp(6))
+			borderInset := gtx.Dp(s.dp(1))
+			cornerRadius := gtx.Dp(s.dp(6))
 			outer := clip.UniformRRect(image.Rect(0, 0, width, height), cornerRadius)
 			paint.FillShape(gtx.Ops, color.NRGBA{R: 120, G: 120, B: 120, A: 255}, outer.Op(gtx.Ops))
 
@@ -430,7 +475,7 @@ func (s *SettingsScreen) actionButton(gtx layout.Context, th *Theme, text string
 			paint.FillShape(gtx.Ops, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, inner.Op(gtx.Ops))
 
 			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				label := material.Label(s.mui, unit.Sp(14), text)
+				label := material.Label(s.mui, s.sp(14), text)
 				label.Color = th.Text
 				return label.Layout(gtx)
 			})
@@ -440,19 +485,19 @@ func (s *SettingsScreen) actionButton(gtx layout.Context, th *Theme, text string
 
 func (s *SettingsScreen) layoutRepoErrorModal(gtx layout.Context, th *Theme) layout.Dimensions {
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		width := min(gtx.Constraints.Max.X-gtx.Dp(unit.Dp(60)), gtx.Dp(unit.Dp(460)))
-		height := gtx.Dp(unit.Dp(210))
-		if width < gtx.Dp(unit.Dp(280)) {
-			width = gtx.Constraints.Max.X - gtx.Dp(unit.Dp(24))
+		width := min(gtx.Constraints.Max.X-gtx.Dp(s.dp(60)), gtx.Dp(s.dp(460)))
+		height := gtx.Dp(s.dp(210))
+		if width < gtx.Dp(s.dp(280)) {
+			width = gtx.Constraints.Max.X - gtx.Dp(s.dp(24))
 		}
 		gtx.Constraints = layout.Exact(image.Pt(width, height))
-		return layoutOutlinedSurface(gtx, unit.Dp(8), color.NRGBA{R: 95, G: 95, B: 95, A: 255}, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: unit.Dp(16), Bottom: unit.Dp(16), Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layoutOutlinedSurface(gtx, s.dp(8), color.NRGBA{R: 95, G: 95, B: 95, A: 255}, color.NRGBA{R: 0, G: 0, B: 0, A: 255}, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Top: s.dp(16), Bottom: s.dp(16), Left: s.dp(16), Right: s.dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						title := material.Body1(s.mui, "Invalid patches repository")
 						title.Color = th.Text
-						return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, title.Layout)
+						return layout.Inset{Bottom: s.dp(10)}.Layout(gtx, title.Layout)
 					}),
 					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 						msg := s.repoValidationError
@@ -465,7 +510,7 @@ func (s *SettingsScreen) layoutRepoErrorModal(gtx layout.Context, th *Theme) lay
 					}),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return s.actionButton(gtx, th, "OK", &s.repoErrorOkBtn, gtx.Dp(unit.Dp(140)))
+							return s.actionButton(gtx, th, "OK", &s.repoErrorOkBtn, gtx.Dp(s.dp(140)))
 						})
 					}),
 				)
